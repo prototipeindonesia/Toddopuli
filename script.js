@@ -29,7 +29,7 @@ const firebaseConfig = {
 // ============================================================
 // ⚠️ KONFIGURASI CLOUDINARY — GANTI DENGAN MILIK ANDA
 // ============================================================
-const CLOUDINARY_CLOUD = "dxxxxx123";              // ← Cloud name Anda
+const CLOUDINARY_CLOUD = "vsuyvv7v";              // ← Cloud name Anda
 const CLOUDINARY_PRESET = "toddopuli_unsigned";    // ← Nama upload preset Anda
 const CLOUDINARY_FOLDER = "toddopuli";             // Folder di Cloudinary (opsional)
 
