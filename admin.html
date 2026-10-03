@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Admin - TODDOPULI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="logo-icon big"><i class="fas fa-shield-halved"></i></div>
+    <h2>Panel Admin TODDOPULI</h2>
+    <p class="login-hint">Masuk dengan akun admin Firebase</p>
+    <label>Email</label>
+    <input type="email" id="authEmail" placeholder="admin@toddopuli.go.id">
+    <label>Password</label>
+    <input type="password" id="authPass" placeholder="••••••••">
+    <button class="btn-primary full" onclick="authLogin()">
+      <i class="fas fa-sign-in-alt"></i> Masuk ke Panel Admin
+    </button>
+    <p id="authError" class="error-msg"></p>
+    <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Kembali ke Beranda</a>
+  </div>
+</div>
+
+<!-- ADMIN APP -->
+<div id="adminApp" style="display:none;">
+  <header class="header">
+    <div class="container header-wrap">
+      <div class="logo" onclick="location.href='index.html'">
+        <div class="logo-icon"><i class="fas fa-cube"></i></div>
+        <div>
+          <h1>Admin TODDOPULI</h1>
+          <small id="userEmail">-</small>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a href="index.html" class="btn-login" style="text-decoration:none;">
+          <i class="fas fa-home"></i> <span>Beranda</span>
+        </a>
+        <button class="btn-login btn-logout" onclick="authLogout()">
+          <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container admin-main">
+    <div class="admin-layout">
+      <!-- SIDEBAR -->
+      <aside class="admin-sidebar">
+        <div class="sidebar-head">
+          <h3><i class="fas fa-th-large"></i> Menu Admin</h3>
+        </div>
+        <button class="side-btn active" onclick="showAdminPage('dashboard', this)">
+          <i class="fas fa-chart-line"></i> Dashboard
+        </button>
+        <button class="side-btn" onclick="showAdminPage('inovasi', this)">
+          <i class="fas fa-lightbulb"></i> Inovasi
+        </button>
+        <button class="side-btn" onclick="showAdminPage('riset', this)">
+          <i class="fas fa-flask"></i> Riset
+        </button>
+        <button class="side-btn" onclick="showAdminPage('publikasi', this)">
+          <i class="fas fa-book"></i> Publikasi
+        </button>
+        <button class="side-btn" onclick="showAdminPage('hki', this)">
+          <i class="fas fa-certificate"></i> HKI
+        </button>
+        <button class="side-btn" onclick="showAdminPage('berita', this)">
+          <i class="fas fa-newspaper"></i> Berita
+        </button>
+        <button class="side-btn" onclick="showAdminPage('pelatihan', this)">
+          <i class="fas fa-chalkboard-teacher"></i> Pelatihan
+        </button>
+        <button class="side-btn" onclick="showAdminPage('database', this)">
+          <i class="fas fa-database"></i> Database
+        </button>
+      </aside>
+
+      <!-- CONTENT -->
+      <section class="admin-content">
+        <!-- DASHBOARD -->
+        <div id="adm-dashboard" class="adm-page active">
+          <div class="page-head">
+            <h2><i class="fas fa-chart-line"></i> Dashboard</h2>
+            <p>Ringkasan data TODDOPULI</p>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card" style="--c:#1E3A8A"><i class="fas fa-lightbulb"></i><h3 id="dashInovasi">0</h3><p>Inovasi</p></div>
+            <div class="stat-card" style="--c:#1D4ED8"><i class="fas fa-flask"></i><h3 id="dashRiset">0</h3><p>Riset</p></div>
+            <div class="stat-card" style="--c:#2563EB"><i class="fas fa-book"></i><h3 id="dashPub">0</h3><p>Publikasi</p></div>
+            <div class="stat-card" style="--c:#3B82F6"><i class="fas fa-certificate"></i><h3 id="dashHki">0</h3><p>HKI</p></div>
+            <div class="stat-card" style="--c:#0284C7"><i class="fas fa-newspaper"></i><h3 id="dashBerita">0</h3><p>Berita</p></div>
+            <div class="stat-card" style="--c:#0369A1"><i class="fas fa-chalkboard-teacher"></i><h3 id="dashPelatihan">0</h3><p>Pelatihan</p></div>
+            <div class="stat-card" style="--c:#075985"><i class="fas fa-database"></i><h3 id="dashDb">0</h3><p>Database</p></div>
+          </div>
+
+          <div class="page-head" style="margin-top:30px;">
+            <h3><i class="fas fa-clock-rotate-left"></i> Aktivitas Terkini</h3>
+          </div>
+          <div id="activityLog" class="activity-list">
+            <p class="empty">Belum ada aktivitas.</p>
+          </div>
+        </div>
+
+        <!-- CRUD -->
+        <div id="adm-crud" class="adm-page">
+          <div class="page-head crud-head">
+            <div>
+              <h2 id="crudTitle">Kelola Data</h2>
+              <p id="crudSubtitle">Kelola data melalui panel ini</p>
+            </div>
+            <button class="btn-primary" onclick="openForm()">
+              <i class="fas fa-plus"></i> Tambah Baru
+            </button>
+          </div>
+          <div class="toolbar">
+            <i class="fas fa-search toolbar-icon"></i>
+            <input type="text" id="crudSearch" placeholder="Cari data..." oninput="renderCrud()">
+          </div>
+          <div id="crudList" class="crud-list"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- FORM MODAL -->
+<div class="modal" id="formModal">
+  <div class="modal-content big">
+    <span class="close" onclick="closeForm()">&times;</span>
+    <h2 id="formTitle">Tambah Data</h2>
+    <div id="formFields"></div>
+    <div class="progress-bar" id="uploadProgress" style="display:none;">
+      <div class="progress-fill" id="uploadFill"></div>
+    </div>
+    <button class="btn-primary full" id="saveBtn" onclick="saveForm()">
+      <i class="fas fa-save"></i> Simpan Data
+    </button>
+  </div>
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
