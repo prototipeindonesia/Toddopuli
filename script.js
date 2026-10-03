@@ -1,13 +1,15 @@
 /* ============================================================
-   TODDOPULI v3 - Script Utama
+   TODDOPULI v3.1 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
 ============================================================ */
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  initializeApp, deleteApp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, setDoc, query, where, serverTimestamp, onSnapshot
+  getDocs, getDoc, setDoc, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
@@ -114,8 +116,8 @@ const KATEGORI = {
 // ============================================================
 // STATE GLOBAL
 // ============================================================
-let currentUser = null;         // Firebase user
-let currentProfile = null;      // { role, nama, email } dari collection users
+let currentUser = null;
+let currentProfile = null;
 let currentAdminPage = 'dashboard';
 let cachedData = {
   inovasi:[], riset:[], publikasi:[], hki:[],
@@ -129,14 +131,16 @@ let pendingUploadFile = null;
 let unsubscribers = [];
 let chartTahunInstance = null;
 let chartOpdInstance = null;
-let isAdmin = false;
+let isFirstSnapshot = true;  // Untuk hindari toast "Data Baru" saat load pertama
 
 // ============================================================
 // UTIL
 // ============================================================
 const $ = (id) => document.getElementById(id);
 const isAdminPage = () => !!$('adminApp');
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+}[c]));
 
 function formatTanggal(t) {
   if (!t) return '-';
@@ -152,7 +156,11 @@ function formatTanggal(t) {
 function toast(type, title, msg, duration = 4000) {
   const container = $('toastContainer');
   if (!container) return alert(`${title}\n${msg}`);
-  const icons = { success:'fa-circle-check', error:'fa-circle-xmark', info:'fa-circle-info' };
+  const icons = {
+    success:'fa-circle-check',
+    error:'fa-circle-xmark',
+    info:'fa-circle-info'
+  };
   const el = document.createElement('div');
   el.className = 'toast ' + type;
   el.innerHTML = `
@@ -163,7 +171,10 @@ function toast(type, title, msg, duration = 4000) {
     </div>
   `;
   container.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(120%)'; el.style.transition = '0.4s'; }, duration);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(120%)';
+  }, duration);
   setTimeout(() => el.remove(), duration + 400);
 }
 
@@ -176,7 +187,7 @@ function isAdminOrAbove() { return ['super_admin','admin'].includes(role()); }
 function isEditorOrAbove() { return ['super_admin','admin','editor'].includes(role()); }
 
 // ============================================================
-// LOAD DATA + REALTIME LISTENER
+// LOAD DATA
 // ============================================================
 async function loadAllData() {
   const keys = Object.keys(KATEGORI);
@@ -191,53 +202,80 @@ async function loadAllData() {
   }));
 }
 
+// ============================================================
+// REALTIME LISTENER
+// ============================================================
 function startRealtimeListeners() {
   // Hentikan listener lama
   unsubscribers.forEach(u => { try { u(); } catch {} });
   unsubscribers = [];
+  isFirstSnapshot = true;
 
   Object.keys(KATEGORI).forEach(k => {
-    const unsub = onSnapshot(collection(db, k), (snap) => {
-      const prev = cachedData[k].length;
-      cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Cek perubahan
-      if (snap.docChanges().some(c => c.type === 'added') && prev > 0) {
-        const added = snap.docChanges().filter(c => c.type === 'added');
-        added.forEach(c => {
-          toast('info', '📢 Data Baru', `${KATEGORI[k].nama}: ${c.doc.data().judul || '-'}`);
-        });
-      }
-      // Refresh UI kalau di halaman admin
-      if (isAdminPage() && currentAdminPage === k) renderCrud();
-      if (isAdminPage() && currentAdminPage === 'dashboard') {
-        updateStats(); renderDashboardCharts();
-      }
-      if (isAdminPage() && currentAdminPage === 'galeri') renderGaleri();
-      // Refresh publik
-      if (!isAdminPage()) {
-        const fn = { inovasi:renderInovasi, riset:renderRiset, publikasi:renderPublikasi,
-                     hki:renderHki, berita:renderBerita, pelatihan:renderPelatihan,
-                     database:renderDatabase }[k];
-        if (fn && $('list' + k.charAt(0).toUpperCase() + k.slice(1))) fn();
-        if (k === 'inovasi' || k === 'berita' || k === 'pelatihan') renderPubGaleri();
-        updateStats();
-      }
-    }, (err) => console.warn('Realtime err', k, err));
+    const unsub = onSnapshot(
+      collection(db, k),
+      (snap) => {
+        const prevLen = cachedData[k].length;
+        cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Toast hanya kalau memang ADA data baru (bukan load pertama)
+        if (!isFirstSnapshot && prevLen > 0) {
+          const added = snap.docChanges().filter(c => c.type === 'added');
+          added.forEach(c => {
+            const judul = c.doc.data().judul || '-';
+            toast('info', '📢 Data Baru', `${KATEGORI[k].nama}: ${judul}`);
+          });
+        }
+
+        // Refresh UI sesuai halaman aktif
+        if (isAdminPage()) {
+          if (currentAdminPage === k) renderCrud();
+          else if (currentAdminPage === 'dashboard') {
+            updateStats();
+            renderDashboardCharts();
+          } else if (currentAdminPage === 'galeri') {
+            renderGaleri();
+          }
+        } else {
+          // Halaman publik
+          const renderFn = {
+            inovasi: renderInovasi,
+            riset: renderRiset,
+            publikasi: renderPublikasi,
+            hki: renderHki,
+            berita: renderBerita,
+            pelatihan: renderPelatihan,
+            database: renderDatabase
+          }[k];
+          if (renderFn) renderFn();
+          if (['inovasi','berita','pelatihan'].includes(k)) renderPubGaleri();
+          updateStats();
+        }
+      },
+      (err) => console.warn('Realtime err:', k, err)
+    );
     unsubscribers.push(unsub);
   });
 
-  // Users listener (khusus admin page)
+  // Users listener (khusus super admin)
   if (isAdminPage() && isSuperAdmin()) {
-    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
-      cachedUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (currentAdminPage === 'users') renderUsers();
-    });
+    const unsub = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        cachedUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (currentAdminPage === 'users') renderUsers();
+      },
+      (err) => console.warn('Users listener err:', err)
+    );
     unsubscribers.push(unsub);
   }
+
+  // Setelah 2 detik, snapshot sudah bukan "pertama" lagi
+  setTimeout(() => { isFirstSnapshot = false; }, 2000);
 }
 
 // ============================================================
-// RENDER PUBLIK
+// RENDER STATISTIK
 // ============================================================
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
@@ -259,111 +297,149 @@ function emptyMsg(text = 'Belum ada data.') {
 }
 
 function buildCard(d, k, extraLabel = '') {
-  const img = d.gambar ? `<img class="thumb" src="${esc(d.gambar)}" alt="${esc(d.judul)}" loading="lazy">` : '';
+  const img = d.gambar
+    ? `<img class="thumb" src="${esc(d.gambar)}" alt="${esc(d.judul)}" loading="lazy">`
+    : '';
   const badge = extraLabel ? `<span class="badge">${esc(extraLabel)}</span>` : '';
+  const desc = String(d.deskripsi || '');
+  const descCut = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
   return `<div class="item" onclick="showDetail('${k}','${d.id}')">
     ${img}
     <h4>${esc(d.judul)}</h4>
-    <p>${esc(d.deskripsi).substring(0,120)}${d.deskripsi?.length>120?'...':''}</p>
+    <p>${esc(descCut)}</p>
     ${badge}
   </div>`;
 }
 
+// ============================================================
+// RENDER PUBLIK
+// ============================================================
 function renderInovasi() {
+  if (!$('listInovasi')) return;
   const q = ($('searchInovasi')?.value || '').toLowerCase();
   const th = $('filterTahunInovasi')?.value || '';
   let d = cachedData.inovasi;
-  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q) || (x.opd||'').toLowerCase().includes(q));
+  if (q) d = d.filter(x =>
+    (x.judul||'').toLowerCase().includes(q) ||
+    (x.opd||'').toLowerCase().includes(q)
+  );
   if (th) d = d.filter(x => x.tahun === th);
-  if ($('listInovasi')) $('listInovasi').innerHTML = d.length
+  $('listInovasi').innerHTML = d.length
     ? d.map(x => buildCard(x, 'inovasi', `${x.opd} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada data inovasi.');
 }
 
 function renderRiset() {
+  if (!$('listRiset')) return;
   const q = ($('searchRiset')?.value || '').toLowerCase();
   let d = cachedData.riset;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  if ($('listRiset')) $('listRiset').innerHTML = d.length
+  $('listRiset').innerHTML = d.length
     ? d.map(x => buildCard(x, 'riset', `${x.peneliti} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada data riset.');
 }
 
 function renderPublikasi() {
+  if (!$('listPublikasi')) return;
   const q = ($('searchPub')?.value || '').toLowerCase();
   let d = cachedData.publikasi;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  if ($('listPublikasi')) $('listPublikasi').innerHTML = d.length
+  $('listPublikasi').innerHTML = d.length
     ? d.map(x => buildCard(x, 'publikasi', `${x.jenis} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada publikasi.');
 }
 
 function renderHki() {
+  if (!$('listHki')) return;
   const q = ($('searchHki')?.value || '').toLowerCase();
   let d = cachedData.hki;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  if ($('listHki')) $('listHki').innerHTML = d.length
+  $('listHki').innerHTML = d.length
     ? d.map(x => buildCard(x, 'hki', `${x.jenis} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada data HKI.');
 }
 
 function renderBerita() {
+  if (!$('listBerita')) return;
   const d = cachedData.berita;
-  if ($('listBerita')) $('listBerita').innerHTML = d.length
+  $('listBerita').innerHTML = d.length
     ? d.map(x => buildCard(x, 'berita', formatTanggal(x.tanggal))).join('')
     : emptyMsg('Belum ada berita.');
 }
 
 function renderPelatihan() {
+  if (!$('listPelatihan')) return;
   const q = ($('searchPelatihan')?.value || '').toLowerCase();
   let d = cachedData.pelatihan;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  if ($('listPelatihan')) $('listPelatihan').innerHTML = d.length
+  $('listPelatihan').innerHTML = d.length
     ? d.map(x => buildCard(x, 'pelatihan', formatTanggal(x.tanggal))).join('')
     : emptyMsg('Belum ada pelatihan.');
 }
 
 function renderDatabase() {
+  if (!$('listDatabase')) return;
   const q = ($('searchDb')?.value || '').toLowerCase();
   let d = cachedData.database;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  if ($('listDatabase')) $('listDatabase').innerHTML = d.length
+  $('listDatabase').innerHTML = d.length
     ? d.map(x => buildCard(x, 'database', x.kategori)).join('')
     : emptyMsg('Belum ada data.');
 }
 
 // ============================================================
-// GALERI PUBLIK
+// GALERI (PUBLIK & ADMIN)
 // ============================================================
-function renderPubGaleri() {
-  const container = $('pubGaleriList');
-  if (!container) return;
-  const q = ($('pubGaleriSearch')?.value || '').toLowerCase();
+function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
   ['inovasi','berita','pelatihan'].forEach(k => {
+    if (filterKategori && filterKategori !== k) return;
     cachedData[k].forEach(d => {
       if (d.gambar) items.push({ ...d, _kategori: k });
     });
   });
-  const filtered = q
-    ? items.filter(x => (x.judul||'').toLowerCase().includes(q))
-    : items;
-  container.innerHTML = filtered.length
-    ? filtered.map(x => `
-      <div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
-        <img src="${esc(x.gambar)}" alt="${esc(x.judul)}" loading="lazy">
-        <span class="galeri-tag">${KATEGORI[x._kategori].nama}</span>
-        <div class="galeri-info">
-          <b>${esc(x.judul)}</b>
-          <small>${esc(x.opd || x.peneliti || formatTanggal(x.tanggal) || '-')}</small>
-        </div>
-      </div>
-    `).join('')
+  if (query) {
+    const q = query.toLowerCase();
+    return items.filter(x => (x.judul||'').toLowerCase().includes(q));
+  }
+  return items;
+}
+
+function buildGaleriCard(x) {
+  const meta = x.opd || x.peneliti || formatTanggal(x.tanggal) || '-';
+  return `<div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
+    <img src="${esc(x.gambar)}" alt="${esc(x.judul)}" loading="lazy">
+    <span class="galeri-tag">${KATEGORI[x._kategori].nama}</span>
+    <div class="galeri-info">
+      <b>${esc(x.judul)}</b>
+      <small>${esc(meta)}</small>
+    </div>
+  </div>`;
+}
+
+function renderPubGaleri() {
+  const container = $('pubGaleriList');
+  if (!container) return;
+  const q = $('pubGaleriSearch')?.value || '';
+  const items = getGaleriItems('', q);
+  container.innerHTML = items.length
+    ? items.map(buildGaleriCard).join('')
     : emptyMsg('Belum ada foto di galeri.');
 }
 
+function renderGaleri() {
+  const container = $('galeriList');
+  if (!container) return;
+  const q = $('galeriSearch')?.value || '';
+  const f = $('galeriFilter')?.value || '';
+  const items = getGaleriItems(f, q);
+  container.innerHTML = items.length
+    ? items.map(buildGaleriCard).join('')
+    : emptyMsg('Belum ada gambar.');
+}
+
 // ============================================================
-// NAVIGASI
+// NAVIGASI PUBLIK
 // ============================================================
 function showPage(page, e) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -399,7 +475,9 @@ function showDetail(k, id) {
   if (!d) return;
   const cfg = KATEGORI[k];
   let html = `<h2>${esc(d.judul)}</h2>`;
-  if (d.gambar) html += `<img class="preview-img" src="${esc(d.gambar)}" alt="">`;
+  if (d.gambar) {
+    html += `<img class="preview-img" src="${esc(d.gambar)}" alt="">`;
+  }
   cfg.fields.forEach(f => {
     if (['judul','gambar','dokumen','sertifikat'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
@@ -407,8 +485,12 @@ function showDetail(k, id) {
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
-  if (d.dokumen) html += `<a href="${esc(d.dokumen)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
-  if (d.sertifikat) html += `<a href="${esc(d.sertifikat)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
+  if (d.dokumen) {
+    html += `<a href="${esc(d.dokumen)}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
+  }
+  if (d.sertifikat) {
+    html += `<a href="${esc(d.sertifikat)}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
+  }
   $('detailContent').innerHTML = html;
   $('detailModal').classList.add('show');
 }
@@ -437,28 +519,40 @@ async function doLogin() {
     toast('success', 'Login Berhasil', 'Mengalihkan ke panel admin...');
     setTimeout(() => window.location.href = 'admin.html', 800);
   } catch (e) {
-    err.textContent = 'Login gagal: ' + (e.code === 'auth/invalid-credential' ? 'Email atau password salah.' : e.message);
+    err.textContent = 'Login gagal: ' + (
+      e.code === 'auth/invalid-credential'
+        ? 'Email atau password salah.'
+        : e.message
+    );
   }
 }
 
-function loginGuest() { closeLogin(); toast('info', 'Mode Pengunjung', 'Semua fitur publik dapat diakses.'); }
+function loginGuest() {
+  closeLogin();
+  toast('info', 'Mode Pengunjung', 'Semua fitur publik dapat diakses.');
+}
 
 // ============================================================
 // AUTH STATE
 // ============================================================
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
+
+  // Update tombol login di publik
   const btn = $('loginBtn');
   if (btn) {
     if (user) {
       btn.innerHTML = `<i class="fas fa-user-shield"></i> <span>${esc(user.email.split('@')[0])}</span>`;
-      btn.onclick = () => { if (confirm('Buka Panel Admin?')) location.href='admin.html'; };
+      btn.onclick = () => {
+        if (confirm('Buka Panel Admin?')) location.href = 'admin.html';
+      };
     } else {
       btn.innerHTML = `<i class="fas fa-user"></i> <span>Login</span>`;
       btn.onclick = openLogin;
     }
   }
 
+  // Handle halaman admin
   if (isAdminPage()) {
     if (user) {
       // Ambil profil user
@@ -501,7 +595,11 @@ async function authLogin() {
   try {
     await signInWithEmailAndPassword(auth, email, pass);
   } catch (e) {
-    err.textContent = 'Login gagal: ' + (e.code === 'auth/invalid-credential' ? 'Email atau password salah.' : e.message);
+    err.textContent = 'Login gagal: ' + (
+      e.code === 'auth/invalid-credential'
+        ? 'Email atau password salah.'
+        : e.message
+    );
   }
 }
 
@@ -536,6 +634,8 @@ const PAGE_TITLES = {
 
 function showAdminPage(page, btn) {
   currentAdminPage = page;
+
+  // Pindah halaman
   document.querySelectorAll('.adm-page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.side-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
@@ -543,7 +643,8 @@ function showAdminPage(page, btn) {
   if (page === 'dashboard') {
     $('adm-dashboard').classList.add('active');
     updateStats();
-    setTimeout(renderDashboardCharts, 100);
+    // Panggil setelah DOM render
+    requestAnimationFrame(() => renderDashboardCharts());
   } else if (page === 'galeri') {
     $('adm-galeri').classList.add('active');
     renderGaleri();
@@ -568,11 +669,16 @@ function showAdminPage(page, btn) {
 // DASHBOARD CHARTS
 // ============================================================
 function renderDashboardCharts() {
-  if (typeof Chart === 'undefined') return;
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js belum siap');
+    return;
+  }
 
   // Chart 1: Inovasi per Tahun
   const tahunMap = {};
-  cachedData.inovasi.forEach(x => { if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun]||0)+1; });
+  cachedData.inovasi.forEach(x => {
+    if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun] || 0) + 1;
+  });
   const tahunLabels = Object.keys(tahunMap).sort();
   const tahunValues = tahunLabels.map(t => tahunMap[t]);
 
@@ -591,7 +697,8 @@ function renderDashboardCharts() {
         }]
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
       }
@@ -600,7 +707,9 @@ function renderDashboardCharts() {
 
   // Chart 2: Inovasi per OPD
   const opdMap = {};
-  cachedData.inovasi.forEach(x => { if (x.opd) opdMap[x.opd] = (opdMap[x.opd]||0)+1; });
+  cachedData.inovasi.forEach(x => {
+    if (x.opd) opdMap[x.opd] = (opdMap[x.opd] || 0) + 1;
+  });
   const opdLabels = Object.keys(opdMap).slice(0, 8);
   const opdValues = opdLabels.map(o => opdMap[o]);
   const colors = ['#1E3A8A','#1D4ED8','#2563EB','#3B82F6','#60A5FA','#93C5FD','#BFDBFE','#DBEAFE'];
@@ -619,19 +728,29 @@ function renderDashboardCharts() {
         }]
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, padding: 10 }
+          }
+        }
       }
     });
   }
 }
 
 // ============================================================
-// CRUD
+// CRUD LIST
 // ============================================================
 function renderCrud() {
   const k = currentAdminPage;
   if (k === 'dashboard' || k === 'galeri' || k === 'users') return;
+
+  const container = $('crudList');
+  if (!container) return;
+
   const q = ($('crudSearch')?.value || '').toLowerCase();
   let list = cachedData[k] || [];
   if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
@@ -639,56 +758,30 @@ function renderCrud() {
   const canDelete = isAdminOrAbove();
   const canEdit = isEditorOrAbove();
 
-  $('crudList').innerHTML = list.length
+  container.innerHTML = list.length
     ? list.map(d => {
       const img = d.gambar ? `<img class="thumb" src="${esc(d.gambar)}" alt="">` : '';
       const badge = d.opd || d.jenis || d.kategori || d.peneliti || d.pemilik;
       const date = d.tanggal ? formatTanggal(d.tanggal) : d.tahun;
+      const desc = String(d.deskripsi || '');
+      const descCut = desc.length > 100 ? desc.substring(0, 100) + '...' : desc;
       return `<div class="crud-item">
         ${img}
         <h4>${esc(d.judul)}</h4>
-        <p>${esc(d.deskripsi||'').substring(0,100)}${d.deskripsi?.length>100?'...':''}</p>
+        <p>${esc(descCut)}</p>
         ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
         ${date ? `<div class="meta" style="font-size:11px;color:#94A3B8;margin-top:6px;"><i class="fas fa-calendar"></i> ${esc(date)}</div>` : ''}
         <div class="crud-actions">
-          <button class="btn-edit" onclick="openForm('${d.id}')" ${canEdit?'':'disabled'}><i class="fas fa-pen"></i> Edit</button>
-          <button class="btn-del" onclick="hapusData('${d.id}')" ${canDelete?'':'disabled'}><i class="fas fa-trash"></i> Hapus</button>
+          <button class="btn-edit" onclick="openForm('${d.id}')" ${canEdit ? '' : 'disabled'}>
+            <i class="fas fa-pen"></i> Edit
+          </button>
+          <button class="btn-del" onclick="hapusData('${d.id}')" ${canDelete ? '' : 'disabled'}>
+            <i class="fas fa-trash"></i> Hapus
+          </button>
         </div>
       </div>`;
     }).join('')
     : emptyMsg('Belum ada data.');
-}
-
-// ============================================================
-// GALERI (ADMIN)
-// ============================================================
-function renderGaleri() {
-  const container = $('galeriList');
-  if (!container) return;
-  const q = ($('galeriSearch')?.value || '').toLowerCase();
-  const f = $('galeriFilter')?.value || '';
-  const items = [];
-  ['inovasi','berita','pelatihan'].forEach(k => {
-    if (f && f !== k) return;
-    cachedData[k].forEach(d => {
-      if (d.gambar) items.push({ ...d, _kategori: k });
-    });
-  });
-  const filtered = q
-    ? items.filter(x => (x.judul||'').toLowerCase().includes(q))
-    : items;
-  container.innerHTML = filtered.length
-    ? filtered.map(x => `
-      <div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
-        <img src="${esc(x.gambar)}" alt="${esc(x.judul)}" loading="lazy">
-        <span class="galeri-tag">${KATEGORI[x._kategori].nama}</span>
-        <div class="galeri-info">
-          <b>${esc(x.judul)}</b>
-          <small>${esc(x.opd || x.peneliti || formatTanggal(x.tanggal) || '-')}</small>
-        </div>
-      </div>
-    `).join('')
-    : emptyMsg('Belum ada gambar.');
 }
 
 // ============================================================
@@ -697,7 +790,10 @@ function renderGaleri() {
 function openForm(id = null) {
   const k = currentAdminPage;
   if (k === 'dashboard' || k === 'galeri' || k === 'users') return;
-  if (!isEditorOrAbove()) { toast('error', 'Akses Ditolak', 'Anda tidak punya izin.'); return; }
+  if (!isEditorOrAbove()) {
+    toast('error', 'Akses Ditolak', 'Anda tidak punya izin.');
+    return;
+  }
 
   editingKategori = k;
   editingId = id;
@@ -711,14 +807,14 @@ function openForm(id = null) {
   cfg.fields.forEach(f => {
     const val = d?.[f.key] ?? '';
     const req = f.required ? 'required' : '';
-    html += `<label>${f.label}${f.required?' <span style="color:#DC2626">*</span>':''}</label>`;
+    html += `<label>${f.label}${f.required ? ' <span style="color:#DC2626">*</span>' : ''}</label>`;
 
     if (f.type === 'textarea') {
       html += `<textarea id="f_${f.key}" ${req} placeholder="${f.label}...">${esc(val)}</textarea>`;
     } else if (f.type === 'select') {
       html += `<select id="f_${f.key}" ${req}>`;
       f.options.forEach(o => {
-        html += `<option value="${esc(o)}" ${val===o?'selected':''}>${esc(o)}</option>`;
+        html += `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`;
       });
       html += `</select>`;
     } else if (f.type === 'image') {
@@ -740,7 +836,12 @@ function openForm(id = null) {
           <small>PDF/DOC/XLS • Maks 10MB</small>
         </div>
         <input type="file" id="file_${f.key}" accept=".pdf,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleFilePick(this,'${f.key}','file')">
-        <div id="prev_${f.key}">${val ? `<div class="preview-file"><i class="fas fa-file-pdf"></i><span>File sudah tersimpan</span><a href="${esc(val)}" target="_blank" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a></div>` : ''}</div>
+        <div id="prev_${f.key}">${val ? `
+          <div class="preview-file">
+            <i class="fas fa-file-pdf"></i>
+            <span>File sudah tersimpan</span>
+            <a href="${esc(val)}" target="_blank" rel="noopener" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a>
+          </div>` : ''}</div>
         <input type="hidden" id="f_${f.key}" value="${esc(val)}">
       `;
     } else {
@@ -751,13 +852,21 @@ function openForm(id = null) {
   $('formModal').classList.add('show');
 }
 
-function closeForm() { $('formModal')?.classList.remove('show'); editingId = null; }
+function closeForm() {
+  $('formModal')?.classList.remove('show');
+  editingId = null;
+  pendingUploadFile = null;
+}
 
 function handleFilePick(input, key, kind) {
   const file = input.files?.[0];
   if (!file) return;
   const max = kind === 'image' ? 5 : 10;
-  if (file.size > max * 1024 * 1024) { alert(`Ukuran file maksimal ${max}MB`); input.value = ''; return; }
+  if (file.size > max * 1024 * 1024) {
+    alert(`Ukuran file maksimal ${max}MB`);
+    input.value = '';
+    return;
+  }
   pendingUploadFile = { file, key, kind };
   const prev = $('prev_' + key);
   if (kind === 'image') {
@@ -779,18 +888,27 @@ async function uploadFile(file, path, onProgress) {
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
+
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+      if (e.lengthComputable) {
+        onProgress?.(Math.round((e.loaded / e.total) * 100));
+      }
     };
+
     xhr.onload = () => {
       if (xhr.status === 200 || xhr.status === 201) {
         try {
           const res = JSON.parse(xhr.responseText);
           resolve(res.secure_url || res.url);
-        } catch { reject(new Error('Respons Cloudinary tidak valid')); }
+        } catch {
+          reject(new Error('Respons Cloudinary tidak valid'));
+        }
       } else {
         let msg = 'Upload gagal (' + xhr.status + ')';
-        try { const errRes = JSON.parse(xhr.responseText); if (errRes.error?.message) msg = errRes.error.message; } catch {}
+        try {
+          const errRes = JSON.parse(xhr.responseText);
+          if (errRes.error?.message) msg = errRes.error.message;
+        } catch {}
         reject(new Error(msg));
       }
     };
@@ -805,18 +923,28 @@ async function uploadFile(file, path, onProgress) {
 async function saveForm() {
   const k = editingKategori;
   if (!k) return;
-  if (!isEditorOrAbove()) { toast('error', 'Akses Ditolak', 'Anda tidak punya izin.'); return; }
+  if (!isEditorOrAbove()) {
+    toast('error', 'Akses Ditolak', 'Anda tidak punya izin.');
+    return;
+  }
 
   const cfg = KATEGORI[k];
   const btn = $('saveBtn');
   const data = {};
+
+  // Kumpulkan data teks
   for (const f of cfg.fields) {
     if (f.type === 'image' || f.type === 'file') continue;
     const el = $('f_' + f.key);
     const v = el ? el.value.trim() : '';
-    if (f.required && !v) { alert(`Field "${f.label}" wajib diisi!`); return; }
+    if (f.required && !v) {
+      alert(`Field "${f.label}" wajib diisi!`);
+      return;
+    }
     if (v !== '') data[f.key] = v;
   }
+
+  // Ambil URL file lama (untuk edit tanpa ganti file)
   for (const f of cfg.fields) {
     if (f.type !== 'image' && f.type !== 'file') continue;
     const hidden = $('f_' + f.key);
@@ -827,6 +955,7 @@ async function saveForm() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
+    // Upload file baru jika ada
     if (pendingUploadFile) {
       const { file, key } = pendingUploadFile;
       $('uploadProgress').style.display = 'block';
@@ -838,10 +967,19 @@ async function saveForm() {
       data[key] = url;
     }
 
+    // Simpan ke Firestore
     if (editingId) {
-      await updateDoc(doc(db, k, editingId), { ...data, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, k, editingId), {
+        ...data,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser?.email
+      });
     } else {
-      await addDoc(collection(db, k), { ...data, createdAt: serverTimestamp(), createdBy: currentUser?.email });
+      await addDoc(collection(db, k), {
+        ...data,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser?.email
+      });
     }
 
     saveActivity(editingId ? 'edit' : 'tambah', k, data.judul);
@@ -860,7 +998,10 @@ async function saveForm() {
 
 async function hapusData(id) {
   const k = currentAdminPage;
-  if (!isAdminOrAbove()) { toast('error', 'Akses Ditolak', 'Hanya Admin yang bisa menghapus.'); return; }
+  if (!isAdminOrAbove()) {
+    toast('error', 'Akses Ditolak', 'Hanya Admin yang bisa menghapus.');
+    return;
+  }
   if (!confirm('Yakin hapus data ini?')) return;
   try {
     const item = cachedData[k].find(x => x.id === id);
@@ -879,7 +1020,9 @@ function exportExcel() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
   const data = cachedData[k] || [];
-  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+  if (!data.length) {
+    return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+  }
 
   const cfg = KATEGORI[k];
   const rows = data.map(d => {
@@ -904,7 +1047,9 @@ function exportPDF() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
   const data = cachedData[k] || [];
-  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+  if (!data.length) {
+    return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+  }
 
   const cfg = KATEGORI[k];
   const { jsPDF } = window.jspdf;
@@ -919,7 +1064,6 @@ function exportPDF() {
   doc.setFontSize(9);
   doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
 
-  // Pilih maksimal 6 kolom
   const fields = cfg.fields.filter(f => !['image','file'].includes(f.type)).slice(0, 6);
   const headers = [fields.map(f => f.label)];
   const rows = data.map(d => fields.map(f => String(d[f.key] ?? '').substring(0, 60)));
@@ -943,7 +1087,10 @@ function exportPDF() {
 function triggerImport() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
-  if (!isEditorOrAbove()) { toast('error', 'Akses Ditolak', 'Anda tidak punya izin.'); return; }
+  if (!isEditorOrAbove()) {
+    toast('error', 'Akses Ditolak', 'Anda tidak punya izin.');
+    return;
+  }
   $('importFile').click();
 }
 
@@ -954,37 +1101,62 @@ async function handleImport(input) {
   const cfg = KATEGORI[k];
 
   try {
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data);
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer);
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-    if (!rows.length) { toast('error', 'File Kosong', 'Tidak ada data di file Excel.'); return; }
+    if (!rows.length) {
+      toast('error', 'File Kosong', 'Tidak ada data di file Excel.');
+      return;
+    }
 
     if (!confirm(`Akan mengimpor ${rows.length} baris ke kategori ${cfg.nama}. Lanjutkan?`)) return;
 
-    // Mapping kolom → key
+    // Mapping kolom: label ATAU key (case-insensitive)
     const labelToKey = {};
-    cfg.fields.forEach(f => { labelToKey[f.label.toLowerCase()] = f.key; });
-    // Juga terima key langsung
-    cfg.fields.forEach(f => { labelToKey[f.key.toLowerCase()] = f.key; });
+    cfg.fields.forEach(f => {
+      labelToKey[f.label.toLowerCase().trim()] = f.key;
+      labelToKey[f.key.toLowerCase().trim()] = f.key;
+    });
 
-    let success = 0, failed = 0;
+    // Set judul existing (untuk cek duplikat)
+    const existingJudul = new Set(
+      (cachedData[k] || []).map(x => String(x.judul || '').toLowerCase().trim())
+    );
+
+    let success = 0, skipped = 0, failed = 0;
+
     for (const row of rows) {
       const docData = {};
       Object.keys(row).forEach(col => {
         const key = labelToKey[col.toLowerCase().trim()];
         if (key && row[col] !== '') docData[key] = String(row[col]).trim();
       });
+
       if (!docData.judul) { failed++; continue; }
+
+      // Cek duplikat
+      const j = docData.judul.toLowerCase().trim();
+      if (existingJudul.has(j)) { skipped++; continue; }
+
       try {
-        await addDoc(collection(db, k), { ...docData, createdAt: serverTimestamp(), importedBy: currentUser?.email });
+        await addDoc(collection(db, k), {
+          ...docData,
+          createdAt: serverTimestamp(),
+          importedBy: currentUser?.email
+        });
+        existingJudul.add(j);
         success++;
-      } catch { failed++; }
+      } catch (err) {
+        console.error(err);
+        failed++;
+      }
     }
 
-    toast('success', 'Import Selesai', `${success} data berhasil, ${failed} gagal.`);
-    saveActivity('import', k, `${success} data dari Excel`);
+    const msg = `${success} berhasil, ${skipped} dilewati (duplikat), ${failed} gagal.`;
+    toast('success', 'Import Selesai', msg);
+    saveActivity('import', k, msg);
   } catch (e) {
     console.error(e);
     toast('error', 'Import Gagal', e.message);
@@ -1006,10 +1178,10 @@ function renderUsers() {
       <div class="crud-item">
         <h4><i class="fas fa-user-shield"></i> ${esc(u.nama || u.email)}</h4>
         <p>${esc(u.email)}</p>
-        <span class="role-badge role-${esc(u.role)}">${esc(u.role.replace('_',' '))}</span>
+        <span class="role-badge role-${esc(u.role)}">${esc((u.role || '').replace('_',' '))}</span>
         <div class="crud-actions">
           <button class="btn-edit" onclick="editUser('${u.id}')"><i class="fas fa-pen"></i> Edit</button>
-          <button class="btn-del" onclick="hapusUser('${u.id}')" ${u.id===currentUser?.uid?'disabled':''}>
+          <button class="btn-del" onclick="hapusUser('${u.id}')" ${u.id === currentUser?.uid ? 'disabled' : ''}>
             <i class="fas fa-trash"></i> Hapus
           </button>
         </div>
@@ -1021,8 +1193,10 @@ function renderUsers() {
 function openUserForm() {
   editingUserId = null;
   $('userFormTitle').innerHTML = '<i class="fas fa-user-plus"></i> Tambah Admin';
-  $('u_email').value = ''; $('u_nama').value = '';
-  $('u_role').value = 'admin'; $('u_pass').value = '';
+  $('u_email').value = '';
+  $('u_nama').value = '';
+  $('u_role').value = 'admin';
+  $('u_pass').value = '';
   $('u_email').disabled = false;
   $('u_pass').parentElement.style.display = 'block';
   $('userModal').classList.add('show');
@@ -1041,10 +1215,41 @@ function editUser(id) {
   $('userModal').classList.add('show');
 }
 
-function closeUserForm() { $('userModal')?.classList.remove('show'); editingUserId = null; }
+function closeUserForm() {
+  $('userModal')?.classList.remove('show');
+  editingUserId = null;
+}
+
+/**
+ * 🔥 Buat user baru TANPA mengganggu session login utama
+ * Menggunakan secondary Firebase App instance
+ */
+async function createUserSecondary(email, password) {
+  const SECONDARY_NAME = 'toddopuli-secondary';
+  let secondaryApp;
+  try {
+    secondaryApp = initializeApp(firebaseConfig, SECONDARY_NAME);
+  } catch (e) {
+    // Kalau sudah ada, itu ok
+    console.warn('Secondary app sudah ada, lanjut...');
+  }
+  const secondaryAuth = getAuth(secondaryApp);
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const uid = cred.user.uid;
+    await signOut(secondaryAuth);
+    await deleteApp(secondaryApp);
+    return uid;
+  } catch (e) {
+    try { await deleteApp(secondaryApp); } catch {}
+    throw e;
+  }
+}
 
 async function saveUser() {
-  if (!isSuperAdmin()) return toast('error', 'Akses Ditolak', 'Hanya Super Admin.');
+  if (!isSuperAdmin()) {
+    return toast('error', 'Akses Ditolak', 'Hanya Super Admin.');
+  }
 
   const email = $('u_email').value.trim();
   const nama = $('u_nama').value.trim();
@@ -1055,16 +1260,24 @@ async function saveUser() {
 
   try {
     if (editingUserId) {
-      // Update role/nama saja
-      await updateDoc(doc(db, 'users', editingUserId), { nama, role: r, updatedAt: serverTimestamp() });
+      // Update role & nama saja
+      await updateDoc(doc(db, 'users', editingUserId), {
+        nama, role: r,
+        updatedAt: serverTimestamp()
+      });
       toast('success', 'Berhasil', 'Data admin diperbarui.');
     } else {
-      // Buat user baru via Firebase Auth
-      if (!pass || pass.length < 6) return toast('error', 'Gagal', 'Password minimal 6 karakter.');
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      await setDoc(doc(db, 'users', cred.user.uid), {
-        email, nama: nama || email, role: r,
-        createdAt: serverTimestamp()
+      // Buat user baru via secondary app (TIDAK sign-out dari akun saat ini!)
+      if (!pass || pass.length < 6) {
+        return toast('error', 'Gagal', 'Password minimal 6 karakter.');
+      }
+      const uid = await createUserSecondary(email, pass);
+      await setDoc(doc(db, 'users', uid), {
+        email,
+        nama: nama || email,
+        role: r,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser?.email
       });
       toast('success', 'Berhasil', 'Admin baru ditambahkan.');
     }
@@ -1072,15 +1285,23 @@ async function saveUser() {
   } catch (e) {
     console.error(e);
     let msg = e.message;
-    if (e.code === 'auth/email-already-in-use') msg = 'Email sudah terdaftar.';
+    if (e.code === 'auth/email-already-in-use') {
+      msg = 'Email sudah terdaftar di Firebase Authentication.';
+    } else if (e.code === 'auth/invalid-email') {
+      msg = 'Format email tidak valid.';
+    } else if (e.code === 'auth/weak-password') {
+      msg = 'Password terlalu lemah (minimal 6 karakter).';
+    }
     toast('error', 'Gagal', msg);
   }
 }
 
 async function hapusUser(id) {
   if (!isSuperAdmin()) return;
-  if (id === currentUser?.uid) return toast('error', 'Tidak Bisa', 'Tidak bisa hapus akun sendiri.');
-  if (!confirm('Yakin hapus admin ini? (Akun Firebase Auth harus dihapus manual dari Console)')) return;
+  if (id === currentUser?.uid) {
+    return toast('error', 'Tidak Bisa', 'Tidak bisa hapus akun sendiri.');
+  }
+  if (!confirm('Yakin hapus admin ini dari daftar?\n\nCatatan: Akun Firebase Authentication harus dihapus manual dari Console Firebase.')) return;
   try {
     await deleteDoc(doc(db, 'users', id));
     toast('success', 'Berhasil', 'Admin dihapus dari daftar.');
@@ -1090,11 +1311,15 @@ async function hapusUser(id) {
 }
 
 // ============================================================
-// ACTIVITY LOG
+// ACTIVITY LOG (localStorage — per device)
 // ============================================================
 function saveActivity(action, kategori, judul) {
   const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
-  log.unshift({ action, kategori, judul, time: new Date().toISOString(), user: currentUser?.email || 'unknown' });
+  log.unshift({
+    action, kategori, judul,
+    time: new Date().toISOString(),
+    user: currentUser?.email || 'unknown'
+  });
   localStorage.setItem('toddopuli_log', JSON.stringify(log.slice(0, 20)));
 }
 
@@ -1109,10 +1334,16 @@ function renderActivity() {
   el.innerHTML = log.map(a => {
     const iconMap = { tambah:'fa-plus', edit:'fa-pen', hapus:'fa-trash', import:'fa-file-import' };
     const colorMap = { tambah:'#059669', edit:'#F59E0B', hapus:'#DC2626', import:'#2563EB' };
-    const t = new Date(a.time).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    const t = new Date(a.time).toLocaleString('id-ID', {
+      day:'2-digit', month:'short',
+      hour:'2-digit', minute:'2-digit'
+    });
     return `<div class="activity-item">
-      <i class="fas ${iconMap[a.action]||'fa-circle'}" style="background:${(colorMap[a.action]||'#64748B')}20;color:${colorMap[a.action]||'#64748B'};"></i>
-      <div><b>${esc(a.action.toUpperCase())}</b> ${esc(a.kategori)} — ${esc(a.judul)}<div class="time">${t}</div></div>
+      <i class="fas ${iconMap[a.action] || 'fa-circle'}" style="background:${(colorMap[a.action] || '#64748B')}20;color:${colorMap[a.action] || '#64748B'};"></i>
+      <div>
+        <b>${esc(a.action.toUpperCase())}</b> ${esc(a.kategori)} — ${esc(a.judul)}
+        <div class="time">${t}</div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1122,33 +1353,75 @@ function renderActivity() {
 // ============================================================
 function globalSearch() {
   const q = $('globalSearch')?.value.trim();
-  if (!q) return alert('Masukkan kata kunci pencarian.');
-  const res = [];
+  if (!q) {
+    toast('error', 'Kata Kunci Kosong', 'Silakan isi kata kunci pencarian.');
+    return;
+  }
+  const qLower = q.toLowerCase();
+  const results = [];
   Object.entries(cachedData).forEach(([k, list]) => {
     list.forEach(d => {
-      if ((d.judul||'').toLowerCase().includes(q.toLowerCase())) {
-        res.push(`• [${KATEGORI[k].nama}] ${d.judul}`);
+      if ((d.judul || '').toLowerCase().includes(qLower) ||
+          (d.deskripsi || '').toLowerCase().includes(qLower)) {
+        results.push({ k, id: d.id, judul: d.judul, kategori: KATEGORI[k].nama });
       }
     });
   });
-  alert(res.length ? `Ditemukan ${res.length} hasil:\n\n${res.slice(0,10).join('\n')}${res.length>10?'\n...':''}` : 'Tidak ditemukan hasil untuk: ' + q);
+
+  if (!results.length) {
+    toast('info', 'Tidak Ditemukan', `Tidak ada hasil untuk "${q}"`);
+    return;
+  }
+
+  // Tampilkan hasil di modal detail (lebih baik dari alert)
+  let html = `<h2><i class="fas fa-search"></i> Hasil Pencarian "${esc(q)}"</h2>`;
+  html += `<p style="margin-bottom:14px;color:var(--gray);font-size:13px;">Ditemukan ${results.length} hasil</p>`;
+  html += results.slice(0, 20).map(r => `
+    <div class="item" style="margin-bottom:8px;" onclick="closeDetail();showDetail('${r.k}','${r.id}');">
+      <span class="badge" style="margin-bottom:6px;display:inline-block;">${esc(r.kategori)}</span>
+      <h4 style="margin-top:6px;">${esc(r.judul)}</h4>
+    </div>
+  `).join('');
+  if (results.length > 20) {
+    html += `<p style="text-align:center;color:var(--gray);font-size:12px;margin-top:10px;">Menampilkan 20 dari ${results.length} hasil</p>`;
+  }
+
+  $('detailContent').innerHTML = html;
+  $('detailModal').classList.add('show');
 }
 
 // ============================================================
 // EVENT LISTENERS
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  $('globalSearch')?.addEventListener('keypress', e => { if (e.key === 'Enter') globalSearch(); });
-  $('loginPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
-  $('authPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') authLogin(); });
+  $('globalSearch')?.addEventListener('keypress', e => {
+    if (e.key === 'Enter') globalSearch();
+  });
+  $('loginPass')?.addEventListener('keypress', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+  $('authPass')?.addEventListener('keypress', e => {
+    if (e.key === 'Enter') authLogin();
+  });
   $('pubGaleriSearch')?.addEventListener('input', renderPubGaleri);
+
+  // Klik luar modal untuk close
   document.querySelectorAll('.modal').forEach(m => {
-    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+    m.addEventListener('click', e => {
+      if (e.target === m) m.classList.remove('show');
+    });
+  });
+
+  // ESC untuk close modal
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal.show').forEach(m => m.classList.remove('show'));
+    }
   });
 });
 
 // ============================================================
-// EXPOSE
+// EXPOSE KE WINDOW (untuk onclick di HTML)
 // ============================================================
 Object.assign(window, {
   showPage, toggleMenu, openLogin, closeLogin, doLogin, loginGuest,
@@ -1161,20 +1434,25 @@ Object.assign(window, {
 });
 
 // ============================================================
-// BOOTSTRAP
+// BOOTSTRAP PUBLIK
 // ============================================================
 if (!isAdminPage()) {
   (async () => {
     try {
       await loadAllData();
       updateStats();
-      renderInovasi(); renderRiset(); renderPublikasi();
-      renderHki(); renderBerita(); renderPelatihan(); renderDatabase();
+      renderInovasi();
+      renderRiset();
+      renderPublikasi();
+      renderHki();
+      renderBerita();
+      renderPelatihan();
+      renderDatabase();
       renderPubGaleri();
       startRealtimeListeners();
     } catch (e) {
       console.error('Init error:', e);
-      alert('Gagal memuat data.');
+      toast('error', 'Gagal Memuat', 'Periksa koneksi internet Anda.');
     }
   })();
 }
