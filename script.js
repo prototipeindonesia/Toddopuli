@@ -1,20 +1,21 @@
 /* ============================================================
-   TODDOPULI - Script Utama
+   TODDOPULI v3 - Script Utama
    Bapperida Kota Palopo
-   Firebase Firestore + Auth + Cloudinary Upload
+   Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
 ============================================================ */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, serverTimestamp
+  getDocs, getDoc, setDoc, query, where, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+  createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ============================================================
-// KONFIGURASI FIREBASE
+// KONFIGURASI
 // ============================================================
 const firebaseConfig = {
   apiKey: "AIzaSyDd5aSNwQWtKNdyZvin7hOwlHHdBDyRQQg",
@@ -26,22 +27,15 @@ const firebaseConfig = {
   measurementId: "G-840HNFYJ61"
 };
 
-// ============================================================
-// KONFIGURASI CLOUDINARY
-// ============================================================
-const CLOUDINARY_CLOUD = "vsuyvv7v";              // ← Cloud name Anda (2 huruf v)
-const CLOUDINARY_PRESET = "toddopuli_unsigned";    // ← Nama upload preset Unsigned
-// Catatan: TIDAK perlu parameter folder manual, karena preset sudah punya folder default
+const CLOUDINARY_CLOUD = "vsuyvv7v";
+const CLOUDINARY_PRESET = "toddopuli_unsigned";
 
-// ============================================================
-// INIT FIREBASE
-// ============================================================
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
 // ============================================================
-// KONFIG KATEGORI & FIELD
+// KONFIG KATEGORI
 // ============================================================
 const KATEGORI = {
   inovasi: {
@@ -120,15 +114,22 @@ const KATEGORI = {
 // ============================================================
 // STATE GLOBAL
 // ============================================================
-let currentUser = null;
+let currentUser = null;         // Firebase user
+let currentProfile = null;      // { role, nama, email } dari collection users
 let currentAdminPage = 'dashboard';
 let cachedData = {
   inovasi:[], riset:[], publikasi:[], hki:[],
   berita:[], pelatihan:[], database:[]
 };
+let cachedUsers = [];
 let editingId = null;
 let editingKategori = null;
+let editingUserId = null;
 let pendingUploadFile = null;
+let unsubscribers = [];
+let chartTahunInstance = null;
+let chartOpdInstance = null;
+let isAdmin = false;
 
 // ============================================================
 // UTIL
@@ -146,7 +147,36 @@ function formatTanggal(t) {
 }
 
 // ============================================================
-// AMBIL SEMUA DATA DARI FIRESTORE
+// TOAST NOTIFICATION
+// ============================================================
+function toast(type, title, msg, duration = 4000) {
+  const container = $('toastContainer');
+  if (!container) return alert(`${title}\n${msg}`);
+  const icons = { success:'fa-circle-check', error:'fa-circle-xmark', info:'fa-circle-info' };
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `
+    <i class="fas ${icons[type] || icons.info}"></i>
+    <div class="toast-body">
+      <div class="toast-title">${esc(title)}</div>
+      <div class="toast-msg">${esc(msg)}</div>
+    </div>
+  `;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(120%)'; el.style.transition = '0.4s'; }, duration);
+  setTimeout(() => el.remove(), duration + 400);
+}
+
+// ============================================================
+// ROLE / PERMISSION
+// ============================================================
+function role() { return currentProfile?.role || null; }
+function isSuperAdmin() { return role() === 'super_admin'; }
+function isAdminOrAbove() { return ['super_admin','admin'].includes(role()); }
+function isEditorOrAbove() { return ['super_admin','admin','editor'].includes(role()); }
+
+// ============================================================
+// LOAD DATA + REALTIME LISTENER
 // ============================================================
 async function loadAllData() {
   const keys = Object.keys(KATEGORI);
@@ -159,6 +189,51 @@ async function loadAllData() {
       cachedData[k] = [];
     }
   }));
+}
+
+function startRealtimeListeners() {
+  // Hentikan listener lama
+  unsubscribers.forEach(u => { try { u(); } catch {} });
+  unsubscribers = [];
+
+  Object.keys(KATEGORI).forEach(k => {
+    const unsub = onSnapshot(collection(db, k), (snap) => {
+      const prev = cachedData[k].length;
+      cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Cek perubahan
+      if (snap.docChanges().some(c => c.type === 'added') && prev > 0) {
+        const added = snap.docChanges().filter(c => c.type === 'added');
+        added.forEach(c => {
+          toast('info', '📢 Data Baru', `${KATEGORI[k].nama}: ${c.doc.data().judul || '-'}`);
+        });
+      }
+      // Refresh UI kalau di halaman admin
+      if (isAdminPage() && currentAdminPage === k) renderCrud();
+      if (isAdminPage() && currentAdminPage === 'dashboard') {
+        updateStats(); renderDashboardCharts();
+      }
+      if (isAdminPage() && currentAdminPage === 'galeri') renderGaleri();
+      // Refresh publik
+      if (!isAdminPage()) {
+        const fn = { inovasi:renderInovasi, riset:renderRiset, publikasi:renderPublikasi,
+                     hki:renderHki, berita:renderBerita, pelatihan:renderPelatihan,
+                     database:renderDatabase }[k];
+        if (fn && $('list' + k.charAt(0).toUpperCase() + k.slice(1))) fn();
+        if (k === 'inovasi' || k === 'berita' || k === 'pelatihan') renderPubGaleri();
+        updateStats();
+      }
+    }, (err) => console.warn('Realtime err', k, err));
+    unsubscribers.push(unsub);
+  });
+
+  // Users listener (khusus admin page)
+  if (isAdminPage() && isSuperAdmin()) {
+    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+      cachedUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (currentAdminPage === 'users') renderUsers();
+    });
+    unsubscribers.push(unsub);
+  }
 }
 
 // ============================================================
@@ -200,7 +275,7 @@ function renderInovasi() {
   let d = cachedData.inovasi;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q) || (x.opd||'').toLowerCase().includes(q));
   if (th) d = d.filter(x => x.tahun === th);
-  $('listInovasi').innerHTML = d.length
+  if ($('listInovasi')) $('listInovasi').innerHTML = d.length
     ? d.map(x => buildCard(x, 'inovasi', `${x.opd} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada data inovasi.');
 }
@@ -209,7 +284,7 @@ function renderRiset() {
   const q = ($('searchRiset')?.value || '').toLowerCase();
   let d = cachedData.riset;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  $('listRiset').innerHTML = d.length
+  if ($('listRiset')) $('listRiset').innerHTML = d.length
     ? d.map(x => buildCard(x, 'riset', `${x.peneliti} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada data riset.');
 }
@@ -218,7 +293,7 @@ function renderPublikasi() {
   const q = ($('searchPub')?.value || '').toLowerCase();
   let d = cachedData.publikasi;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  $('listPublikasi').innerHTML = d.length
+  if ($('listPublikasi')) $('listPublikasi').innerHTML = d.length
     ? d.map(x => buildCard(x, 'publikasi', `${x.jenis} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada publikasi.');
 }
@@ -227,14 +302,14 @@ function renderHki() {
   const q = ($('searchHki')?.value || '').toLowerCase();
   let d = cachedData.hki;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  $('listHki').innerHTML = d.length
+  if ($('listHki')) $('listHki').innerHTML = d.length
     ? d.map(x => buildCard(x, 'hki', `${x.jenis} • ${x.tahun}`)).join('')
     : emptyMsg('Belum ada data HKI.');
 }
 
 function renderBerita() {
   const d = cachedData.berita;
-  $('listBerita').innerHTML = d.length
+  if ($('listBerita')) $('listBerita').innerHTML = d.length
     ? d.map(x => buildCard(x, 'berita', formatTanggal(x.tanggal))).join('')
     : emptyMsg('Belum ada berita.');
 }
@@ -243,7 +318,7 @@ function renderPelatihan() {
   const q = ($('searchPelatihan')?.value || '').toLowerCase();
   let d = cachedData.pelatihan;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  $('listPelatihan').innerHTML = d.length
+  if ($('listPelatihan')) $('listPelatihan').innerHTML = d.length
     ? d.map(x => buildCard(x, 'pelatihan', formatTanggal(x.tanggal))).join('')
     : emptyMsg('Belum ada pelatihan.');
 }
@@ -252,13 +327,43 @@ function renderDatabase() {
   const q = ($('searchDb')?.value || '').toLowerCase();
   let d = cachedData.database;
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
-  $('listDatabase').innerHTML = d.length
+  if ($('listDatabase')) $('listDatabase').innerHTML = d.length
     ? d.map(x => buildCard(x, 'database', x.kategori)).join('')
     : emptyMsg('Belum ada data.');
 }
 
 // ============================================================
-// NAVIGASI HALAMAN PUBLIK
+// GALERI PUBLIK
+// ============================================================
+function renderPubGaleri() {
+  const container = $('pubGaleriList');
+  if (!container) return;
+  const q = ($('pubGaleriSearch')?.value || '').toLowerCase();
+  const items = [];
+  ['inovasi','berita','pelatihan'].forEach(k => {
+    cachedData[k].forEach(d => {
+      if (d.gambar) items.push({ ...d, _kategori: k });
+    });
+  });
+  const filtered = q
+    ? items.filter(x => (x.judul||'').toLowerCase().includes(q))
+    : items;
+  container.innerHTML = filtered.length
+    ? filtered.map(x => `
+      <div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
+        <img src="${esc(x.gambar)}" alt="${esc(x.judul)}" loading="lazy">
+        <span class="galeri-tag">${KATEGORI[x._kategori].nama}</span>
+        <div class="galeri-info">
+          <b>${esc(x.judul)}</b>
+          <small>${esc(x.opd || x.peneliti || formatTanggal(x.tanggal) || '-')}</small>
+        </div>
+      </div>
+    `).join('')
+    : emptyMsg('Belum ada foto di galeri.');
+}
+
+// ============================================================
+// NAVIGASI
 // ============================================================
 function showPage(page, e) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -278,7 +383,7 @@ function showPage(page, e) {
   const map = {
     inovasi: renderInovasi, riset: renderRiset, publikasi: renderPublikasi,
     hki: renderHki, berita: renderBerita, pelatihan: renderPelatihan,
-    database: renderDatabase
+    database: renderDatabase, galeri: renderPubGaleri
   };
   if (map[page]) map[page]();
   if (page === 'home') updateStats();
@@ -294,9 +399,7 @@ function showDetail(k, id) {
   if (!d) return;
   const cfg = KATEGORI[k];
   let html = `<h2>${esc(d.judul)}</h2>`;
-  if (d.gambar) {
-    html += `<img class="preview-img" src="${esc(d.gambar)}" alt="">`;
-  }
+  if (d.gambar) html += `<img class="preview-img" src="${esc(d.gambar)}" alt="">`;
   cfg.fields.forEach(f => {
     if (['judul','gambar','dokumen','sertifikat'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
@@ -304,12 +407,8 @@ function showDetail(k, id) {
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
-  if (d.dokumen) {
-    html += `<a href="${esc(d.dokumen)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
-  }
-  if (d.sertifikat) {
-    html += `<a href="${esc(d.sertifikat)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
-  }
+  if (d.dokumen) html += `<a href="${esc(d.dokumen)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
+  if (d.sertifikat) html += `<a href="${esc(d.sertifikat)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
   $('detailContent').innerHTML = html;
   $('detailModal').classList.add('show');
 }
@@ -335,22 +434,19 @@ async function doLogin() {
   try {
     await signInWithEmailAndPassword(auth, email, pass);
     closeLogin();
-    alert('Login berhasil! Anda dapat mengakses Panel Admin.');
-    window.location.href = 'admin.html';
+    toast('success', 'Login Berhasil', 'Mengalihkan ke panel admin...');
+    setTimeout(() => window.location.href = 'admin.html', 800);
   } catch (e) {
     err.textContent = 'Login gagal: ' + (e.code === 'auth/invalid-credential' ? 'Email atau password salah.' : e.message);
   }
 }
 
-function loginGuest() {
-  closeLogin();
-  alert('Anda masuk sebagai Pengunjung. Semua fitur publik dapat diakses.');
-}
+function loginGuest() { closeLogin(); toast('info', 'Mode Pengunjung', 'Semua fitur publik dapat diakses.'); }
 
 // ============================================================
 // AUTH STATE
 // ============================================================
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   const btn = $('loginBtn');
   if (btn) {
@@ -362,11 +458,30 @@ onAuthStateChanged(auth, (user) => {
       btn.onclick = openLogin;
     }
   }
+
   if (isAdminPage()) {
     if (user) {
+      // Ambil profil user
+      try {
+        const profileSnap = await getDoc(doc(db, 'users', user.uid));
+        if (profileSnap.exists()) {
+          currentProfile = profileSnap.data();
+        } else {
+          currentProfile = { role: 'viewer', email: user.email, nama: user.email };
+          toast('error', 'Akses Ditolak', 'Akun Anda belum terdaftar sebagai admin.');
+        }
+      } catch (e) {
+        console.error(e);
+        currentProfile = { role: 'viewer', email: user.email };
+      }
+
+      if (!isEditorOrAbove()) {
+        toast('error', 'Akses Terbatas', 'Anda tidak punya izin mengelola data.');
+      }
+
       $('authScreen').style.display = 'none';
       $('adminApp').style.display = 'block';
-      $('userEmail').textContent = user.email;
+      $('userEmail').textContent = `${currentProfile.nama || user.email} (${role() || 'viewer'})`;
       initAdmin();
     } else {
       $('authScreen').style.display = 'flex';
@@ -392,6 +507,8 @@ async function authLogin() {
 
 async function authLogout() {
   if (!confirm('Yakin logout?')) return;
+  unsubscribers.forEach(u => { try { u(); } catch {} });
+  unsubscribers = [];
   await signOut(auth);
   location.href = 'index.html';
 }
@@ -400,6 +517,7 @@ async function initAdmin() {
   await loadAllData();
   updateStats();
   renderActivity();
+  startRealtimeListeners();
   showAdminPage('dashboard');
 }
 
@@ -411,7 +529,9 @@ const PAGE_TITLES = {
   hki: ['HKI', 'Kelola Hak Kekayaan Intelektual'],
   berita: ['Berita', 'Kelola berita & informasi'],
   pelatihan: ['Pelatihan', 'Kelola program pelatihan'],
-  database: ['Database', 'Kelola dataset & dokumen']
+  database: ['Database', 'Kelola dataset & dokumen'],
+  galeri: ['Galeri Foto', 'Semua gambar dari berbagai kategori'],
+  users: ['Kelola Admin', 'Atur siapa saja yang bisa mengelola TODDOPULI']
 };
 
 function showAdminPage(page, btn) {
@@ -423,6 +543,17 @@ function showAdminPage(page, btn) {
   if (page === 'dashboard') {
     $('adm-dashboard').classList.add('active');
     updateStats();
+    setTimeout(renderDashboardCharts, 100);
+  } else if (page === 'galeri') {
+    $('adm-galeri').classList.add('active');
+    renderGaleri();
+  } else if (page === 'users') {
+    $('adm-users').classList.add('active');
+    if (!isSuperAdmin()) {
+      $('usersList').innerHTML = '<div class="info-box"><i class="fas fa-lock"></i><p>Hanya Super Admin yang dapat mengelola admin.</p></div>';
+    } else {
+      renderUsers();
+    }
   } else {
     $('adm-crud').classList.add('active');
     const [t, s] = PAGE_TITLES[page] || ['Kelola Data',''];
@@ -433,12 +564,80 @@ function showAdminPage(page, btn) {
   }
 }
 
+// ============================================================
+// DASHBOARD CHARTS
+// ============================================================
+function renderDashboardCharts() {
+  if (typeof Chart === 'undefined') return;
+
+  // Chart 1: Inovasi per Tahun
+  const tahunMap = {};
+  cachedData.inovasi.forEach(x => { if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun]||0)+1; });
+  const tahunLabels = Object.keys(tahunMap).sort();
+  const tahunValues = tahunLabels.map(t => tahunMap[t]);
+
+  const ctx1 = $('chartTahun');
+  if (ctx1) {
+    if (chartTahunInstance) chartTahunInstance.destroy();
+    chartTahunInstance = new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: tahunLabels.length ? tahunLabels : ['Belum ada data'],
+        datasets: [{
+          label: 'Jumlah Inovasi',
+          data: tahunValues.length ? tahunValues : [0],
+          backgroundColor: '#1E3A8A',
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  }
+
+  // Chart 2: Inovasi per OPD
+  const opdMap = {};
+  cachedData.inovasi.forEach(x => { if (x.opd) opdMap[x.opd] = (opdMap[x.opd]||0)+1; });
+  const opdLabels = Object.keys(opdMap).slice(0, 8);
+  const opdValues = opdLabels.map(o => opdMap[o]);
+  const colors = ['#1E3A8A','#1D4ED8','#2563EB','#3B82F6','#60A5FA','#93C5FD','#BFDBFE','#DBEAFE'];
+
+  const ctx2 = $('chartOpd');
+  if (ctx2) {
+    if (chartOpdInstance) chartOpdInstance.destroy();
+    chartOpdInstance = new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: opdLabels.length ? opdLabels : ['Belum ada data'],
+        datasets: [{
+          data: opdValues.length ? opdValues : [1],
+          backgroundColor: colors,
+          borderWidth: 2, borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }
+      }
+    });
+  }
+}
+
+// ============================================================
+// CRUD
+// ============================================================
 function renderCrud() {
   const k = currentAdminPage;
-  if (k === 'dashboard') return;
+  if (k === 'dashboard' || k === 'galeri' || k === 'users') return;
   const q = ($('crudSearch')?.value || '').toLowerCase();
   let list = cachedData[k] || [];
   if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
+
+  const canDelete = isAdminOrAbove();
+  const canEdit = isEditorOrAbove();
 
   $('crudList').innerHTML = list.length
     ? list.map(d => {
@@ -452,8 +651,8 @@ function renderCrud() {
         ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
         ${date ? `<div class="meta" style="font-size:11px;color:#94A3B8;margin-top:6px;"><i class="fas fa-calendar"></i> ${esc(date)}</div>` : ''}
         <div class="crud-actions">
-          <button class="btn-edit" onclick="openForm('${d.id}')"><i class="fas fa-pen"></i> Edit</button>
-          <button class="btn-del" onclick="hapusData('${d.id}')"><i class="fas fa-trash"></i> Hapus</button>
+          <button class="btn-edit" onclick="openForm('${d.id}')" ${canEdit?'':'disabled'}><i class="fas fa-pen"></i> Edit</button>
+          <button class="btn-del" onclick="hapusData('${d.id}')" ${canDelete?'':'disabled'}><i class="fas fa-trash"></i> Hapus</button>
         </div>
       </div>`;
     }).join('')
@@ -461,11 +660,45 @@ function renderCrud() {
 }
 
 // ============================================================
+// GALERI (ADMIN)
+// ============================================================
+function renderGaleri() {
+  const container = $('galeriList');
+  if (!container) return;
+  const q = ($('galeriSearch')?.value || '').toLowerCase();
+  const f = $('galeriFilter')?.value || '';
+  const items = [];
+  ['inovasi','berita','pelatihan'].forEach(k => {
+    if (f && f !== k) return;
+    cachedData[k].forEach(d => {
+      if (d.gambar) items.push({ ...d, _kategori: k });
+    });
+  });
+  const filtered = q
+    ? items.filter(x => (x.judul||'').toLowerCase().includes(q))
+    : items;
+  container.innerHTML = filtered.length
+    ? filtered.map(x => `
+      <div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
+        <img src="${esc(x.gambar)}" alt="${esc(x.judul)}" loading="lazy">
+        <span class="galeri-tag">${KATEGORI[x._kategori].nama}</span>
+        <div class="galeri-info">
+          <b>${esc(x.judul)}</b>
+          <small>${esc(x.opd || x.peneliti || formatTanggal(x.tanggal) || '-')}</small>
+        </div>
+      </div>
+    `).join('')
+    : emptyMsg('Belum ada gambar.');
+}
+
+// ============================================================
 // FORM MODAL
 // ============================================================
 function openForm(id = null) {
   const k = currentAdminPage;
-  if (k === 'dashboard') return;
+  if (k === 'dashboard' || k === 'galeri' || k === 'users') return;
+  if (!isEditorOrAbove()) { toast('error', 'Akses Ditolak', 'Anda tidak punya izin.'); return; }
+
   editingKategori = k;
   editingId = id;
   pendingUploadFile = null;
@@ -507,12 +740,7 @@ function openForm(id = null) {
           <small>PDF/DOC/XLS • Maks 10MB</small>
         </div>
         <input type="file" id="file_${f.key}" accept=".pdf,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleFilePick(this,'${f.key}','file')">
-        <div id="prev_${f.key}">${val ? `
-          <div class="preview-file">
-            <i class="fas fa-file-pdf"></i>
-            <span>File sudah tersimpan</span>
-            <a href="${esc(val)}" target="_blank" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a>
-          </div>` : ''}</div>
+        <div id="prev_${f.key}">${val ? `<div class="preview-file"><i class="fas fa-file-pdf"></i><span>File sudah tersimpan</span><a href="${esc(val)}" target="_blank" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a></div>` : ''}</div>
         <input type="hidden" id="f_${f.key}" value="${esc(val)}">
       `;
     } else {
@@ -529,72 +757,43 @@ function handleFilePick(input, key, kind) {
   const file = input.files?.[0];
   if (!file) return;
   const max = kind === 'image' ? 5 : 10;
-  if (file.size > max * 1024 * 1024) {
-    alert(`Ukuran file maksimal ${max}MB`);
-    input.value = '';
-    return;
-  }
+  if (file.size > max * 1024 * 1024) { alert(`Ukuran file maksimal ${max}MB`); input.value = ''; return; }
   pendingUploadFile = { file, key, kind };
   const prev = $('prev_' + key);
   if (kind === 'image') {
-    const url = URL.createObjectURL(file);
-    prev.innerHTML = `<img class="preview-img" src="${url}" alt="">`;
+    prev.innerHTML = `<img class="preview-img" src="${URL.createObjectURL(file)}" alt="">`;
   } else {
     prev.innerHTML = `<div class="preview-file"><i class="fas fa-file"></i><span>${esc(file.name)}</span></div>`;
   }
 }
 
 // ============================================================
-// UPLOAD KE CLOUDINARY (UNSIGNED)
+// UPLOAD CLOUDINARY
 // ============================================================
 async function uploadFile(file, path, onProgress) {
   return new Promise((resolve, reject) => {
-    // URL endpoint Cloudinary (resource_type: auto = support image + raw/file)
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`;
-
-    console.log("=== CLOUDINARY UPLOAD DEBUG ===");
-    console.log("Cloud Name:", CLOUDINARY_CLOUD);
-    console.log("Preset:", CLOUDINARY_PRESET);
-    console.log("URL:", url);
-    console.log("File:", file.name, "|", file.type, "|", (file.size/1024).toFixed(1), "KB");
-    console.log("===============================");
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_PRESET);
-    // ⚠️ TIDAK kirim 'folder' — biarkan preset yang atur
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
-
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        onProgress?.(pct);
-      }
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
     };
-
     xhr.onload = () => {
-      console.log("Response Status:", xhr.status);
-      console.log("Response Body:", xhr.responseText);
-
       if (xhr.status === 200 || xhr.status === 201) {
         try {
           const res = JSON.parse(xhr.responseText);
           resolve(res.secure_url || res.url);
-        } catch (err) {
-          reject(new Error('Respons Cloudinary tidak valid'));
-        }
+        } catch { reject(new Error('Respons Cloudinary tidak valid')); }
       } else {
         let msg = 'Upload gagal (' + xhr.status + ')';
-        try {
-          const errRes = JSON.parse(xhr.responseText);
-          if (errRes.error?.message) msg = errRes.error.message;
-        } catch {}
+        try { const errRes = JSON.parse(xhr.responseText); if (errRes.error?.message) msg = errRes.error.message; } catch {}
         reject(new Error(msg));
       }
     };
-
     xhr.onerror = () => reject(new Error('Koneksi ke Cloudinary gagal'));
     xhr.send(formData);
   });
@@ -606,10 +805,10 @@ async function uploadFile(file, path, onProgress) {
 async function saveForm() {
   const k = editingKategori;
   if (!k) return;
+  if (!isEditorOrAbove()) { toast('error', 'Akses Ditolak', 'Anda tidak punya izin.'); return; }
+
   const cfg = KATEGORI[k];
   const btn = $('saveBtn');
-
-  // Kumpulkan data teks
   const data = {};
   for (const f of cfg.fields) {
     if (f.type === 'image' || f.type === 'file') continue;
@@ -618,8 +817,6 @@ async function saveForm() {
     if (f.required && !v) { alert(`Field "${f.label}" wajib diisi!`); return; }
     if (v !== '') data[f.key] = v;
   }
-
-  // Ambil URL file lama (kalau edit & tidak upload baru)
   for (const f of cfg.fields) {
     if (f.type !== 'image' && f.type !== 'file') continue;
     const hidden = $('f_' + f.key);
@@ -630,7 +827,6 @@ async function saveForm() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
-    // Upload file baru jika ada
     if (pendingUploadFile) {
       const { file, key } = pendingUploadFile;
       $('uploadProgress').style.display = 'block';
@@ -642,26 +838,18 @@ async function saveForm() {
       data[key] = url;
     }
 
-    // Simpan ke Firestore
     if (editingId) {
       await updateDoc(doc(db, k, editingId), { ...data, updatedAt: serverTimestamp() });
     } else {
-      await addDoc(collection(db, k), { ...data, createdAt: serverTimestamp() });
+      await addDoc(collection(db, k), { ...data, createdAt: serverTimestamp(), createdBy: currentUser?.email });
     }
 
-    // Reload data dari Firestore
-    const snap = await getDocs(collection(db, k));
-    cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
     saveActivity(editingId ? 'edit' : 'tambah', k, data.judul);
-
     closeForm();
-    renderCrud();
-    updateStats();
-    alert('✅ Data berhasil disimpan!');
+    toast('success', 'Berhasil!', 'Data berhasil disimpan.');
   } catch (e) {
-    console.error("Save error:", e);
-    alert('❌ Gagal menyimpan: ' + e.message);
+    console.error(e);
+    toast('error', 'Gagal Menyimpan', e.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> Simpan Data';
@@ -672,17 +860,232 @@ async function saveForm() {
 
 async function hapusData(id) {
   const k = currentAdminPage;
+  if (!isAdminOrAbove()) { toast('error', 'Akses Ditolak', 'Hanya Admin yang bisa menghapus.'); return; }
   if (!confirm('Yakin hapus data ini?')) return;
   try {
     const item = cachedData[k].find(x => x.id === id);
     await deleteDoc(doc(db, k, id));
-    cachedData[k] = cachedData[k].filter(x => x.id !== id);
     saveActivity('hapus', k, item?.judul || '');
-    renderCrud();
-    updateStats();
-    alert('Data dihapus.');
+    toast('success', 'Terhapus', 'Data berhasil dihapus.');
   } catch (e) {
-    alert('Gagal hapus: ' + e.message);
+    toast('error', 'Gagal Hapus', e.message);
+  }
+}
+
+// ============================================================
+// EXPORT EXCEL
+// ============================================================
+function exportExcel() {
+  const k = currentAdminPage;
+  if (!KATEGORI[k]) return;
+  const data = cachedData[k] || [];
+  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+
+  const cfg = KATEGORI[k];
+  const rows = data.map(d => {
+    const row = {};
+    cfg.fields.forEach(f => {
+      row[f.label] = d[f.key] ?? '';
+    });
+    return row;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, cfg.nama);
+  XLSX.writeFile(wb, `TODDOPULI_${cfg.nama}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('success', 'Export Berhasil', `Data ${cfg.nama} telah diunduh.`);
+}
+
+// ============================================================
+// EXPORT PDF
+// ============================================================
+function exportPDF() {
+  const k = currentAdminPage;
+  if (!KATEGORI[k]) return;
+  const data = cachedData[k] || [];
+  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+
+  const cfg = KATEGORI[k];
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text('TODDOPULI - Bapperida Kota Palopo', 14, 15);
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'normal');
+  doc.text(`Daftar ${cfg.nama}`, 14, 22);
+  doc.setFontSize(9);
+  doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
+
+  // Pilih maksimal 6 kolom
+  const fields = cfg.fields.filter(f => !['image','file'].includes(f.type)).slice(0, 6);
+  const headers = [fields.map(f => f.label)];
+  const rows = data.map(d => fields.map(f => String(d[f.key] ?? '').substring(0, 60)));
+
+  doc.autoTable({
+    head: headers,
+    body: rows,
+    startY: 33,
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 248, 255] }
+  });
+
+  doc.save(`TODDOPULI_${cfg.nama}_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('success', 'Export Berhasil', `Data ${cfg.nama} telah diunduh.`);
+}
+
+// ============================================================
+// IMPORT EXCEL
+// ============================================================
+function triggerImport() {
+  const k = currentAdminPage;
+  if (!KATEGORI[k]) return;
+  if (!isEditorOrAbove()) { toast('error', 'Akses Ditolak', 'Anda tidak punya izin.'); return; }
+  $('importFile').click();
+}
+
+async function handleImport(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const k = currentAdminPage;
+  const cfg = KATEGORI[k];
+
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows.length) { toast('error', 'File Kosong', 'Tidak ada data di file Excel.'); return; }
+
+    if (!confirm(`Akan mengimpor ${rows.length} baris ke kategori ${cfg.nama}. Lanjutkan?`)) return;
+
+    // Mapping kolom → key
+    const labelToKey = {};
+    cfg.fields.forEach(f => { labelToKey[f.label.toLowerCase()] = f.key; });
+    // Juga terima key langsung
+    cfg.fields.forEach(f => { labelToKey[f.key.toLowerCase()] = f.key; });
+
+    let success = 0, failed = 0;
+    for (const row of rows) {
+      const docData = {};
+      Object.keys(row).forEach(col => {
+        const key = labelToKey[col.toLowerCase().trim()];
+        if (key && row[col] !== '') docData[key] = String(row[col]).trim();
+      });
+      if (!docData.judul) { failed++; continue; }
+      try {
+        await addDoc(collection(db, k), { ...docData, createdAt: serverTimestamp(), importedBy: currentUser?.email });
+        success++;
+      } catch { failed++; }
+    }
+
+    toast('success', 'Import Selesai', `${success} data berhasil, ${failed} gagal.`);
+    saveActivity('import', k, `${success} data dari Excel`);
+  } catch (e) {
+    console.error(e);
+    toast('error', 'Import Gagal', e.message);
+  } finally {
+    input.value = '';
+  }
+}
+
+// ============================================================
+// USERS MANAGEMENT
+// ============================================================
+function renderUsers() {
+  if (!isSuperAdmin()) return;
+  const container = $('usersList');
+  if (!container) return;
+
+  container.innerHTML = cachedUsers.length
+    ? cachedUsers.map(u => `
+      <div class="crud-item">
+        <h4><i class="fas fa-user-shield"></i> ${esc(u.nama || u.email)}</h4>
+        <p>${esc(u.email)}</p>
+        <span class="role-badge role-${esc(u.role)}">${esc(u.role.replace('_',' '))}</span>
+        <div class="crud-actions">
+          <button class="btn-edit" onclick="editUser('${u.id}')"><i class="fas fa-pen"></i> Edit</button>
+          <button class="btn-del" onclick="hapusUser('${u.id}')" ${u.id===currentUser?.uid?'disabled':''}>
+            <i class="fas fa-trash"></i> Hapus
+          </button>
+        </div>
+      </div>
+    `).join('')
+    : emptyMsg('Belum ada admin terdaftar.');
+}
+
+function openUserForm() {
+  editingUserId = null;
+  $('userFormTitle').innerHTML = '<i class="fas fa-user-plus"></i> Tambah Admin';
+  $('u_email').value = ''; $('u_nama').value = '';
+  $('u_role').value = 'admin'; $('u_pass').value = '';
+  $('u_email').disabled = false;
+  $('u_pass').parentElement.style.display = 'block';
+  $('userModal').classList.add('show');
+}
+
+function editUser(id) {
+  const u = cachedUsers.find(x => x.id === id);
+  if (!u) return;
+  editingUserId = id;
+  $('userFormTitle').innerHTML = '<i class="fas fa-user-pen"></i> Edit Admin';
+  $('u_email').value = u.email || '';
+  $('u_nama').value = u.nama || '';
+  $('u_role').value = u.role || 'admin';
+  $('u_email').disabled = true;
+  $('u_pass').parentElement.style.display = 'none';
+  $('userModal').classList.add('show');
+}
+
+function closeUserForm() { $('userModal')?.classList.remove('show'); editingUserId = null; }
+
+async function saveUser() {
+  if (!isSuperAdmin()) return toast('error', 'Akses Ditolak', 'Hanya Super Admin.');
+
+  const email = $('u_email').value.trim();
+  const nama = $('u_nama').value.trim();
+  const r = $('u_role').value;
+  const pass = $('u_pass').value.trim();
+
+  if (!email) return toast('error', 'Gagal', 'Email wajib diisi.');
+
+  try {
+    if (editingUserId) {
+      // Update role/nama saja
+      await updateDoc(doc(db, 'users', editingUserId), { nama, role: r, updatedAt: serverTimestamp() });
+      toast('success', 'Berhasil', 'Data admin diperbarui.');
+    } else {
+      // Buat user baru via Firebase Auth
+      if (!pass || pass.length < 6) return toast('error', 'Gagal', 'Password minimal 6 karakter.');
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        email, nama: nama || email, role: r,
+        createdAt: serverTimestamp()
+      });
+      toast('success', 'Berhasil', 'Admin baru ditambahkan.');
+    }
+    closeUserForm();
+  } catch (e) {
+    console.error(e);
+    let msg = e.message;
+    if (e.code === 'auth/email-already-in-use') msg = 'Email sudah terdaftar.';
+    toast('error', 'Gagal', msg);
+  }
+}
+
+async function hapusUser(id) {
+  if (!isSuperAdmin()) return;
+  if (id === currentUser?.uid) return toast('error', 'Tidak Bisa', 'Tidak bisa hapus akun sendiri.');
+  if (!confirm('Yakin hapus admin ini? (Akun Firebase Auth harus dihapus manual dari Console)')) return;
+  try {
+    await deleteDoc(doc(db, 'users', id));
+    toast('success', 'Berhasil', 'Admin dihapus dari daftar.');
+  } catch (e) {
+    toast('error', 'Gagal', e.message);
   }
 }
 
@@ -691,11 +1094,7 @@ async function hapusData(id) {
 // ============================================================
 function saveActivity(action, kategori, judul) {
   const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
-  log.unshift({
-    action, kategori, judul,
-    time: new Date().toISOString(),
-    user: currentUser?.email || 'unknown'
-  });
+  log.unshift({ action, kategori, judul, time: new Date().toISOString(), user: currentUser?.email || 'unknown' });
   localStorage.setItem('toddopuli_log', JSON.stringify(log.slice(0, 20)));
 }
 
@@ -708,15 +1107,12 @@ function renderActivity() {
     return;
   }
   el.innerHTML = log.map(a => {
-    const iconMap = { tambah:'fa-plus', edit:'fa-pen', hapus:'fa-trash' };
-    const colorMap = { tambah:'#059669', edit:'#F59E0B', hapus:'#DC2626' };
+    const iconMap = { tambah:'fa-plus', edit:'fa-pen', hapus:'fa-trash', import:'fa-file-import' };
+    const colorMap = { tambah:'#059669', edit:'#F59E0B', hapus:'#DC2626', import:'#2563EB' };
     const t = new Date(a.time).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
     return `<div class="activity-item">
       <i class="fas ${iconMap[a.action]||'fa-circle'}" style="background:${(colorMap[a.action]||'#64748B')}20;color:${colorMap[a.action]||'#64748B'};"></i>
-      <div>
-        <b>${esc(a.action.toUpperCase())}</b> ${esc(a.kategori)} — ${esc(a.judul)}
-        <div class="time">${t}</div>
-      </div>
+      <div><b>${esc(a.action.toUpperCase())}</b> ${esc(a.kategori)} — ${esc(a.judul)}<div class="time">${t}</div></div>
     </div>`;
   }).join('');
 }
@@ -745,25 +1141,27 @@ document.addEventListener('DOMContentLoaded', () => {
   $('globalSearch')?.addEventListener('keypress', e => { if (e.key === 'Enter') globalSearch(); });
   $('loginPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
   $('authPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') authLogin(); });
+  $('pubGaleriSearch')?.addEventListener('input', renderPubGaleri);
   document.querySelectorAll('.modal').forEach(m => {
     m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
   });
 });
 
 // ============================================================
-// EXPOSE KE GLOBAL
+// EXPOSE
 // ============================================================
 Object.assign(window, {
   showPage, toggleMenu, openLogin, closeLogin, doLogin, loginGuest,
   showDetail, closeDetail, globalSearch,
   authLogin, authLogout, showAdminPage, openForm, closeForm, saveForm,
-  hapusData, handleFilePick,
+  hapusData, handleFilePick, exportExcel, exportPDF, triggerImport, handleImport,
+  renderGaleri, renderPubGaleri, openUserForm, editUser, closeUserForm, saveUser, hapusUser,
   renderInovasi, renderRiset, renderPublikasi, renderHki,
   renderBerita, renderPelatihan, renderDatabase, renderCrud
 });
 
 // ============================================================
-// BOOTSTRAP PUBLIK
+// BOOTSTRAP
 // ============================================================
 if (!isAdminPage()) {
   (async () => {
@@ -772,9 +1170,11 @@ if (!isAdminPage()) {
       updateStats();
       renderInovasi(); renderRiset(); renderPublikasi();
       renderHki(); renderBerita(); renderPelatihan(); renderDatabase();
+      renderPubGaleri();
+      startRealtimeListeners();
     } catch (e) {
       console.error('Init error:', e);
-      alert('Gagal memuat data. Periksa koneksi & konfigurasi Firebase.');
+      alert('Gagal memuat data.');
     }
   })();
 }
