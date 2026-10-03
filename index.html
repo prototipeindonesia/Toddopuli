@@ -4,16 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TODDOPULI - Transformasi Olah Data Daerah Palopo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
 
-<!-- HEADER -->
 <header class="header">
   <div class="container header-wrap">
     <div class="logo" onclick="showPage('home')">
-      <div class="logo-icon">T</div>
+      <div class="logo-icon"><i class="fas fa-cube"></i></div>
       <div>
         <h1>TODDOPULI</h1>
         <small>Bapperida Kota Palopo</small>
@@ -31,7 +32,7 @@
     </nav>
     <div class="header-actions">
       <button class="btn-login" id="loginBtn" onclick="openLogin()">
-        <i class="fas fa-user"></i> Login
+        <i class="fas fa-user"></i> <span>Login</span>
       </button>
       <button class="hamburger" onclick="toggleMenu()">
         <i class="fas fa-bars"></i>
@@ -40,138 +41,135 @@
   </div>
 </header>
 
-<!-- HERO -->
 <section class="hero" id="heroSection">
-  <div class="container">
+  <div class="hero-overlay"></div>
+  <div class="container hero-content">
+    <span class="hero-tag"><i class="fas fa-shield-halved"></i> Portal Resmi</span>
     <h2>Selamat Datang di <span>TODDOPULI</span></h2>
     <p>Transformasi Olah Data Daerah Palopo untuk Publikasi dan Layanan Inovasi</p>
     <div class="hero-search">
+      <i class="fas fa-search search-icon"></i>
       <input type="text" id="globalSearch" placeholder="Cari inovasi, riset, publikasi...">
-      <button onclick="globalSearch()"><i class="fas fa-search"></i></button>
+      <button onclick="globalSearch()">Cari</button>
     </div>
     <div class="hero-stats">
-      <div class="stat"><h3 id="statInovasi">0</h3><p>Inovasi</p></div>
-      <div class="stat"><h3 id="statRiset">0</h3><p>Riset</p></div>
-      <div class="stat"><h3 id="statHki">0</h3><p>HKI</p></div>
-      <div class="stat"><h3 id="statBerita">0</h3><p>Berita</p></div>
+      <div class="stat"><i class="fas fa-lightbulb"></i><div><h3 id="statInovasi">0</h3><p>Inovasi</p></div></div>
+      <div class="stat"><i class="fas fa-flask"></i><div><h3 id="statRiset">0</h3><p>Riset</p></div></div>
+      <div class="stat"><i class="fas fa-certificate"></i><div><h3 id="statHki">0</h3><p>HKI</p></div></div>
+      <div class="stat"><i class="fas fa-newspaper"></i><div><h3 id="statBerita">0</h3><p>Berita</p></div></div>
     </div>
   </div>
 </section>
 
-<!-- MAIN CONTENT -->
 <main class="container" id="mainContent">
 
-  <!-- HOME PAGE -->
   <section id="page-home" class="page active">
-    <h2 class="section-title">Layanan TODDOPULI</h2>
+    <h2 class="section-title"><i class="fas fa-grip"></i> Layanan TODDOPULI</h2>
     <div class="grid-cards">
       <div class="card" onclick="showPage('inovasi')">
-        <i class="fas fa-lightbulb"></i>
+        <div class="card-icon"><i class="fas fa-lightbulb"></i></div>
         <h3>Inovasi Palopo</h3>
-        <p>Direktori inovasi daerah dari seluruh OPD Kota Palopo</p>
+        <p>Direktori inovasi daerah dari seluruh OPD</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
       <div class="card" onclick="showPage('riset')">
-        <i class="fas fa-flask"></i>
+        <div class="card-icon"><i class="fas fa-flask"></i></div>
         <h3>Riset Palopo</h3>
         <p>Hasil riset & kajian strategis daerah</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
       <div class="card" onclick="showPage('publikasi')">
-        <i class="fas fa-book"></i>
+        <div class="card-icon"><i class="fas fa-book"></i></div>
         <h3>Publikasi</h3>
         <p>Kumpulan publikasi ilmiah dan dokumen resmi</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
       <div class="card" onclick="showPage('hki')">
-        <i class="fas fa-certificate"></i>
+        <div class="card-icon"><i class="fas fa-certificate"></i></div>
         <h3>Kelola HKI</h3>
         <p>Pengelolaan Hak Kekayaan Intelektual</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
       <div class="card" onclick="showPage('berita')">
-        <i class="fas fa-newspaper"></i>
+        <div class="card-icon"><i class="fas fa-newspaper"></i></div>
         <h3>Berita</h3>
         <p>Informasi terkini seputar riset & inovasi</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
       <div class="card" onclick="showPage('pelatihan')">
-        <i class="fas fa-chalkboard-teacher"></i>
+        <div class="card-icon"><i class="fas fa-chalkboard-teacher"></i></div>
         <h3>Pelatihan</h3>
         <p>Program pelatihan & pengembangan SDM</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
       <div class="card" onclick="showPage('database')">
-        <i class="fas fa-database"></i>
+        <div class="card-icon"><i class="fas fa-database"></i></div>
         <h3>Database</h3>
         <p>Pusat data & dokumen digital daerah</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
     </div>
   </section>
 
-  <!-- INOVASI -->
   <section id="page-inovasi" class="page">
     <h2 class="section-title"><i class="fas fa-lightbulb"></i> Inovasi Palopo</h2>
     <div class="toolbar">
       <input type="text" id="searchInovasi" placeholder="Cari inovasi..." oninput="renderInovasi()">
       <select id="filterTahunInovasi" onchange="renderInovasi()">
         <option value="">Semua Tahun</option>
-        <option>2024</option><option>2023</option><option>2022</option>
+        <option>2025</option><option>2024</option><option>2023</option><option>2022</option>
       </select>
     </div>
-    <div id="listInovasi" class="list-grid"></div>
+    <div id="listInovasi" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- RISET -->
   <section id="page-riset" class="page">
     <h2 class="section-title"><i class="fas fa-flask"></i> Riset Palopo</h2>
     <div class="toolbar">
       <input type="text" id="searchRiset" placeholder="Cari riset..." oninput="renderRiset()">
     </div>
-    <div id="listRiset" class="list-grid"></div>
+    <div id="listRiset" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- PUBLIKASI -->
   <section id="page-publikasi" class="page">
     <h2 class="section-title"><i class="fas fa-book"></i> Publikasi</h2>
     <div class="toolbar">
       <input type="text" id="searchPub" placeholder="Cari publikasi..." oninput="renderPublikasi()">
     </div>
-    <div id="listPublikasi" class="list-grid"></div>
+    <div id="listPublikasi" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- HKI -->
   <section id="page-hki" class="page">
     <h2 class="section-title"><i class="fas fa-certificate"></i> Kelola HKI</h2>
     <div class="info-box">
       <i class="fas fa-info-circle"></i>
-      <p>Fitur pengelolaan HKI memerlukan login admin untuk mengunggah & mengelola sertifikat.</p>
+      <p>Untuk menambah/mengedit data HKI, silakan login sebagai admin melalui <a href="admin.html">Panel Admin</a>.</p>
     </div>
     <div class="toolbar">
       <input type="text" id="searchHki" placeholder="Cari HKI..." oninput="renderHki()">
-      <button class="btn-primary" onclick="openAdminForm('hki')">
-        <i class="fas fa-plus"></i> Tambah HKI
-      </button>
     </div>
-    <div id="listHki" class="list-grid"></div>
+    <div id="listHki" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- BERITA -->
   <section id="page-berita" class="page">
     <h2 class="section-title"><i class="fas fa-newspaper"></i> Berita</h2>
-    <div id="listBerita" class="list-grid"></div>
+    <div id="listBerita" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- PELATIHAN -->
   <section id="page-pelatihan" class="page">
     <h2 class="section-title"><i class="fas fa-chalkboard-teacher"></i> Pelatihan</h2>
     <div class="toolbar">
       <input type="text" id="searchPelatihan" placeholder="Cari pelatihan..." oninput="renderPelatihan()">
     </div>
-    <div id="listPelatihan" class="list-grid"></div>
+    <div id="listPelatihan" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- DATABASE -->
   <section id="page-database" class="page">
     <h2 class="section-title"><i class="fas fa-database"></i> Database</h2>
     <div class="toolbar">
       <input type="text" id="searchDb" placeholder="Cari data..." oninput="renderDatabase()">
     </div>
-    <div id="listDatabase" class="list-grid"></div>
+    <div id="listDatabase" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
 </main>
@@ -181,41 +179,57 @@
   <div class="modal-content">
     <span class="close" onclick="closeLogin()">&times;</span>
     <h2><i class="fas fa-user-lock"></i> Login TODDOPULI</h2>
-    <p class="login-hint">Admin: <b>admin</b> / <b>admin123</b><br>
-       Pengunjung: <b>tamu</b> / <b>tamu</b></p>
-    <input type="text" id="loginUser" placeholder="Username">
-    <input type="password" id="loginPass" placeholder="Password">
-    <button class="btn-primary full" onclick="doLogin()">Masuk</button>
-    <button class="btn-secondary full" onclick="loginGuest()">Masuk sebagai Pengunjung</button>
+    <p class="login-hint">Gunakan email & password yang terdaftar.<br>Admin dapat mengakses Panel Admin setelah login.</p>
+    <label>Email</label>
+    <input type="email" id="loginEmail" placeholder="admin@toddopuli.go.id">
+    <label>Password</label>
+    <input type="password" id="loginPass" placeholder="••••••••">
+    <button class="btn-primary full" onclick="doLogin()">
+      <i class="fas fa-sign-in-alt"></i> Masuk
+    </button>
+    <button class="btn-secondary full" onclick="loginGuest()">
+      <i class="fas fa-user"></i> Masuk sebagai Pengunjung
+    </button>
     <p id="loginError" class="error-msg"></p>
-  </div>
-</div>
-
-<!-- ADMIN FORM MODAL -->
-<div class="modal" id="adminModal">
-  <div class="modal-content">
-    <span class="close" onclick="closeAdminForm()">&times;</span>
-    <h2 id="adminFormTitle">Tambah Data</h2>
-    <div id="adminFormFields"></div>
-    <button class="btn-primary full" onclick="saveAdminForm()">Simpan</button>
   </div>
 </div>
 
 <!-- DETAIL MODAL -->
 <div class="modal" id="detailModal">
-  <div class="modal-content">
+  <div class="modal-content big">
     <span class="close" onclick="closeDetail()">&times;</span>
     <div id="detailContent"></div>
   </div>
 </div>
 
-<!-- FOOTER -->
 <footer class="footer">
   <div class="container">
-    <p>&copy; 2025 TODDOPULI - Bapperida Kota Palopo | Bidang Riset dan Inovasi Daerah</p>
+    <div class="footer-grid">
+      <div>
+        <h3><i class="fas fa-cube"></i> TODDOPULI</h3>
+        <p>Transformasi Olah Data Daerah Palopo untuk Publikasi dan Layanan Inovasi</p>
+      </div>
+      <div>
+        <h4>Layanan</h4>
+        <a onclick="showPage('inovasi')">Inovasi</a>
+        <a onclick="showPage('riset')">Riset</a>
+        <a onclick="showPage('publikasi')">Publikasi</a>
+        <a onclick="showPage('hki')">HKI</a>
+      </div>
+      <div>
+        <h4>Informasi</h4>
+        <a onclick="showPage('berita')">Berita</a>
+        <a onclick="showPage('pelatihan')">Pelatihan</a>
+        <a onclick="showPage('database')">Database</a>
+        <a href="admin.html">Panel Admin</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 TODDOPULI - Bapperida Kota Palopo | Bidang Riset dan Inovasi Daerah</p>
+    </div>
   </div>
 </footer>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 </body>
 </html>
