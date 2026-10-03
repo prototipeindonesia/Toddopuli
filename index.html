@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -29,6 +30,7 @@
       <a onclick="showPage('berita')" class="nav-link">Berita</a>
       <a onclick="showPage('pelatihan')" class="nav-link">Pelatihan</a>
       <a onclick="showPage('database')" class="nav-link">Database</a>
+      <a onclick="showPage('galeri')" class="nav-link">Galeri</a>
     </nav>
     <div class="header-actions">
       <button class="btn-login" id="loginBtn" onclick="openLogin()">
@@ -110,6 +112,15 @@
       </div>
     </div>
   </section>
+
+  <section id="page-galeri" class="page">
+  <h2 class="section-title"><i class="fas fa-images"></i> Galeri Foto</h2>
+  <div class="toolbar">
+    <i class="fas fa-search toolbar-icon"></i>
+    <input type="text" id="pubGaleriSearch" placeholder="Cari gambar..." oninput="renderPubGaleri()">
+  </div>
+  <div id="pubGaleriList" class="galeri-grid"></div>
+</section>
 
   <section id="page-inovasi" class="page">
     <h2 class="section-title"><i class="fas fa-lightbulb"></i> Inovasi Palopo</h2>
@@ -231,5 +242,6 @@
 </footer>
 
 <script type="module" src="script.js"></script>
+  <div id="toastContainer" class="toast-container"></div>
 </body>
 </html>
