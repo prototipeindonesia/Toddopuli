@@ -620,3 +620,132 @@ main { padding: 40px 16px 60px; }
   .modal-content { padding: 22px 18px; border-radius: 16px; }
   .admin-content { padding: 18px; }
 }
+
+/* ============ CHARTS ============ */
+.chart-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin-bottom: 30px;
+}
+.chart-card {
+  background: var(--white); padding: 18px;
+  border-radius: 14px; border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.chart-card h3 {
+  font-size: 14px; color: var(--primary);
+  margin-bottom: 14px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px;
+}
+.chart-card canvas { max-height: 240px; }
+
+/* ============ TOOLBAR ACTIONS ============ */
+.toolbar-actions {
+  display: flex; gap: 6px; margin-left: auto;
+}
+.btn-tool {
+  background: var(--white); color: var(--primary);
+  border: 1px solid var(--border);
+  padding: 10px 12px; border-radius: 10px;
+  cursor: pointer; font-size: 12px;
+  font-family: inherit; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: 0.2s; white-space: nowrap;
+}
+.btn-tool:hover {
+  background: var(--primary); color: #fff;
+  border-color: var(--primary);
+}
+
+/* ============ GALERI ============ */
+.galeri-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.galeri-item {
+  position: relative; border-radius: 12px;
+  overflow: hidden; cursor: pointer;
+  background: var(--primary-soft);
+  aspect-ratio: 1/1;
+  box-shadow: var(--shadow-sm);
+  transition: 0.3s;
+}
+.galeri-item:hover {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-lg);
+}
+.galeri-item img {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+.galeri-item .galeri-info {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85));
+  color: #fff; padding: 20px 12px 12px;
+  font-size: 12px;
+}
+.galeri-item .galeri-info b {
+  display: block; font-size: 13px; margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.galeri-item .galeri-info small { opacity: 0.8; font-size: 10px; }
+.galeri-item .galeri-tag {
+  position: absolute; top: 8px; right: 8px;
+  background: var(--accent); color: var(--dark);
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 10px; font-weight: 700;
+}
+
+/* ============ TOAST ============ */
+.toast-container {
+  position: fixed; top: 20px; right: 20px;
+  z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: #fff; border-left: 4px solid var(--primary);
+  padding: 14px 18px; border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  min-width: 260px; max-width: 340px;
+  display: flex; align-items: flex-start; gap: 12px;
+  animation: toastIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: auto;
+}
+.toast.success { border-left-color: var(--success); }
+.toast.error { border-left-color: var(--danger); }
+.toast.info { border-left-color: var(--primary-light); }
+.toast i { font-size: 20px; margin-top: 2px; }
+.toast.success i { color: var(--success); }
+.toast.error i { color: var(--danger); }
+.toast.info i { color: var(--primary-light); }
+.toast .toast-body { flex: 1; }
+.toast .toast-title {
+  font-size: 13px; font-weight: 700;
+  margin-bottom: 2px; color: var(--dark);
+}
+.toast .toast-msg {
+  font-size: 12px; color: var(--gray); line-height: 1.4;
+}
+@keyframes toastIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ============ USER ROLE BADGE ============ */
+.role-badge {
+  display: inline-block; padding: 3px 10px;
+  border-radius: 20px; font-size: 10px;
+  font-weight: 700; text-transform: uppercase;
+}
+.role-super_admin { background: #FEE2E2; color: #DC2626; }
+.role-admin { background: #DBEAFE; color: #1E40AF; }
+.role-editor { background: #FEF3C7; color: #92400E; }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 768px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .galeri-grid { grid-template-columns: repeat(2, 1fr); }
+  .toolbar-actions { width: 100%; justify-content: flex-end; }
+  .toast-container { top: 10px; right: 10px; left: 10px; }
+  .toast { min-width: auto; max-width: none; }
+}
