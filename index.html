@@ -12,6 +12,7 @@
 </head>
 <body>
 
+<!-- ==================== HEADER ==================== -->
 <header class="header">
   <div class="container header-wrap">
     <div class="logo" onclick="showPage('home')">
@@ -43,6 +44,7 @@
   </div>
 </header>
 
+<!-- ==================== HERO ==================== -->
 <section class="hero" id="heroSection">
   <div class="hero-overlay"></div>
   <div class="container hero-content">
@@ -63,8 +65,10 @@
   </div>
 </section>
 
+<!-- ==================== MAIN CONTENT ==================== -->
 <main class="container" id="mainContent">
 
+  <!-- BERANDA -->
   <section id="page-home" class="page active">
     <h2 class="section-title"><i class="fas fa-grip"></i> Layanan TODDOPULI</h2>
     <div class="grid-cards">
@@ -110,18 +114,16 @@
         <p>Pusat data & dokumen digital daerah</p>
         <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
       </div>
+      <div class="card" onclick="showPage('galeri')">
+        <div class="card-icon"><i class="fas fa-images"></i></div>
+        <h3>Galeri Foto</h3>
+        <p>Dokumentasi visual inovasi & kegiatan</p>
+        <span class="card-arrow"><i class="fas fa-arrow-right"></i></span>
+      </div>
     </div>
   </section>
 
-  <section id="page-galeri" class="page">
-  <h2 class="section-title"><i class="fas fa-images"></i> Galeri Foto</h2>
-  <div class="toolbar">
-    <i class="fas fa-search toolbar-icon"></i>
-    <input type="text" id="pubGaleriSearch" placeholder="Cari gambar..." oninput="renderPubGaleri()">
-  </div>
-  <div id="pubGaleriList" class="galeri-grid"></div>
-</section>
-
+  <!-- INOVASI -->
   <section id="page-inovasi" class="page">
     <h2 class="section-title"><i class="fas fa-lightbulb"></i> Inovasi Palopo</h2>
     <div class="toolbar">
@@ -134,6 +136,7 @@
     <div id="listInovasi" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- RISET -->
   <section id="page-riset" class="page">
     <h2 class="section-title"><i class="fas fa-flask"></i> Riset Palopo</h2>
     <div class="toolbar">
@@ -142,6 +145,7 @@
     <div id="listRiset" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- PUBLIKASI -->
   <section id="page-publikasi" class="page">
     <h2 class="section-title"><i class="fas fa-book"></i> Publikasi</h2>
     <div class="toolbar">
@@ -150,6 +154,7 @@
     <div id="listPublikasi" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- HKI -->
   <section id="page-hki" class="page">
     <h2 class="section-title"><i class="fas fa-certificate"></i> Kelola HKI</h2>
     <div class="info-box">
@@ -162,11 +167,13 @@
     <div id="listHki" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- BERITA -->
   <section id="page-berita" class="page">
     <h2 class="section-title"><i class="fas fa-newspaper"></i> Berita</h2>
     <div id="listBerita" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- PELATIHAN -->
   <section id="page-pelatihan" class="page">
     <h2 class="section-title"><i class="fas fa-chalkboard-teacher"></i> Pelatihan</h2>
     <div class="toolbar">
@@ -175,6 +182,7 @@
     <div id="listPelatihan" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- DATABASE -->
   <section id="page-database" class="page">
     <h2 class="section-title"><i class="fas fa-database"></i> Database</h2>
     <div class="toolbar">
@@ -183,9 +191,19 @@
     <div id="listDatabase" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
+  <!-- GALERI -->
+  <section id="page-galeri" class="page">
+    <h2 class="section-title"><i class="fas fa-images"></i> Galeri Foto</h2>
+    <div class="toolbar">
+      <i class="fas fa-search toolbar-icon"></i>
+      <input type="text" id="pubGaleriSearch" placeholder="Cari gambar..." oninput="renderPubGaleri()">
+    </div>
+    <div id="pubGaleriList" class="galeri-grid"></div>
+  </section>
+
 </main>
 
-<!-- LOGIN MODAL -->
+<!-- ==================== LOGIN MODAL ==================== -->
 <div class="modal" id="loginModal">
   <div class="modal-content">
     <span class="close" onclick="closeLogin()">&times;</span>
@@ -205,7 +223,7 @@
   </div>
 </div>
 
-<!-- DETAIL MODAL -->
+<!-- ==================== DETAIL MODAL ==================== -->
 <div class="modal" id="detailModal">
   <div class="modal-content big">
     <span class="close" onclick="closeDetail()">&times;</span>
@@ -213,6 +231,7 @@
   </div>
 </div>
 
+<!-- ==================== FOOTER ==================== -->
 <footer class="footer">
   <div class="container">
     <div class="footer-grid">
@@ -232,6 +251,7 @@
         <a onclick="showPage('berita')">Berita</a>
         <a onclick="showPage('pelatihan')">Pelatihan</a>
         <a onclick="showPage('database')">Database</a>
+        <a onclick="showPage('galeri')">Galeri Foto</a>
         <a href="admin.html">Panel Admin</a>
       </div>
     </div>
@@ -241,7 +261,11 @@
   </div>
 </footer>
 
+<!-- ==================== TOAST CONTAINER ==================== -->
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ==================== SCRIPT ==================== -->
 <script type="module" src="script.js"></script>
-  <div id="toastContainer" class="toast-container"></div>
+
 </body>
 </html>
