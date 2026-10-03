@@ -1,23 +1,20 @@
 /* ============================================================
    TODDOPULI - Script Utama
    Bapperida Kota Palopo
-   Firebase Firestore + Auth + Storage
+   Firebase Firestore + Auth + Cloudinary Upload
 ============================================================ */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, query, orderBy, serverTimestamp
+  getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  getStorage, ref, uploadBytesResumable, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 // ============================================================
-// ⚠️ GANTI DENGAN firebaseConfig MILIK ANDA (Langkah 1.5)
+// KONFIGURASI FIREBASE
 // ============================================================
 const firebaseConfig = {
   apiKey: "AIzaSyDd5aSNwQWtKNdyZvin7hOwlHHdBDyRQQg",
@@ -28,12 +25,19 @@ const firebaseConfig = {
   appId: "1:335127104149:web:972c337e7f4db3b7e6e99c",
   measurementId: "G-840HNFYJ61"
 };
+
+// ============================================================
+// ⚠️ KONFIGURASI CLOUDINARY — GANTI DENGAN MILIK ANDA
+// ============================================================
+const CLOUDINARY_CLOUD = "dxxxxx123";              // ← Cloud name Anda
+const CLOUDINARY_PRESET = "toddopuli_unsigned";    // ← Nama upload preset Anda
+const CLOUDINARY_FOLDER = "toddopuli";             // Folder di Cloudinary (opsional)
+
 // ============================================================
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const storage = getStorage(app);
 
 // ============================================================
 // KONFIG KATEGORI & FIELD
@@ -157,7 +161,7 @@ async function loadAllData() {
 }
 
 // ============================================================
-// RENDER PUBLIK (index.html)
+// RENDER PUBLIK
 // ============================================================
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
@@ -300,7 +304,6 @@ function showDetail(k, id) {
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
-  // File
   if (d.dokumen) {
     html += `<a href="${esc(d.dokumen)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
   }
@@ -313,7 +316,7 @@ function showDetail(k, id) {
 function closeDetail() { $('detailModal')?.classList.remove('show'); }
 
 // ============================================================
-// LOGIN PUBLIK (index.html)
+// LOGIN PUBLIK
 // ============================================================
 function openLogin() {
   if (currentUser) {
@@ -349,7 +352,6 @@ function loginGuest() {
 // ============================================================
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
-  // Update tombol login di publik
   const btn = $('loginBtn');
   if (btn) {
     if (user) {
@@ -360,7 +362,6 @@ onAuthStateChanged(auth, (user) => {
       btn.onclick = openLogin;
     }
   }
-  // Halaman admin
   if (isAdminPage()) {
     if (user) {
       $('authScreen').style.display = 'none';
@@ -460,7 +461,7 @@ function renderCrud() {
 }
 
 // ============================================================
-// FORM MODAL (Tambah/Edit)
+// FORM MODAL
 // ============================================================
 function openForm(id = null) {
   const k = currentAdminPage;
@@ -496,6 +497,7 @@ function openForm(id = null) {
         </div>
         <input type="file" id="file_${f.key}" accept="image/*" style="display:none" onchange="handleFilePick(this,'${f.key}','image')">
         <div id="prev_${f.key}">${val ? `<img class="preview-img" src="${esc(val)}" alt="">` : ''}</div>
+        <input type="hidden" id="f_${f.key}" value="${esc(val)}">
       `;
     } else if (f.type === 'file') {
       html += `
@@ -542,46 +544,91 @@ function handleFilePick(input, key, kind) {
   }
 }
 
+// ============================================================
+// UPLOAD KE CLOUDINARY
+// ============================================================
 async function uploadFile(file, path, onProgress) {
   return new Promise((resolve, reject) => {
-    const r = ref(storage, path);
-    const task = uploadBytesResumable(r, file);
-    task.on('state_changed',
-      (s) => onProgress?.(Math.round((s.bytesTransferred / s.totalBytes) * 100)),
-      reject,
-      async () => resolve(await getDownloadURL(task.snapshot.ref))
-    );
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    if (CLOUDINARY_FOLDER) formData.append('folder', CLOUDINARY_FOLDER);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        onProgress?.(pct);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          // Kembalikan URL aman (secure_url)
+          resolve(res.secure_url || res.url);
+        } catch (err) {
+          reject(new Error('Respons Cloudinary tidak valid'));
+        }
+      } else {
+        let msg = 'Upload gagal (' + xhr.status + ')';
+        try {
+          const errRes = JSON.parse(xhr.responseText);
+          if (errRes.error?.message) msg += ': ' + errRes.error.message;
+        } catch {}
+        reject(new Error(msg));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Koneksi ke Cloudinary gagal'));
+    xhr.send(formData);
   });
 }
 
+// ============================================================
+// SIMPAN FORM
+// ============================================================
 async function saveForm() {
   const k = editingKategori;
   if (!k) return;
   const cfg = KATEGORI[k];
   const btn = $('saveBtn');
 
-  // Validasi & kumpulkan data
+  // Kumpulkan data teks
   const data = {};
   for (const f of cfg.fields) {
     if (f.type === 'image' || f.type === 'file') continue;
     const el = $('f_' + f.key);
     const v = el ? el.value.trim() : '';
     if (f.required && !v) { alert(`Field "${f.label}" wajib diisi!`); return; }
-    data[f.key] = v;
+    if (v !== '') data[f.key] = v;
+  }
+
+  // Ambil URL file lama (kalau edit & tidak upload baru)
+  for (const f of cfg.fields) {
+    if (f.type !== 'image' && f.type !== 'file') continue;
+    const hidden = $('f_' + f.key);
+    if (hidden && hidden.value) data[f.key] = hidden.value;
   }
 
   try {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
-    // Upload file jika ada
+    // Upload file baru jika ada
     if (pendingUploadFile) {
-      const { file, key, kind } = pendingUploadFile;
+      const { file, key } = pendingUploadFile;
       const ext = file.name.split('.').pop();
       const path = `${k}/${Date.now()}_${key}.${ext}`;
       $('uploadProgress').style.display = 'block';
+      $('uploadFill').style.width = '0%';
       const url = await uploadFile(file, path, (p) => {
         $('uploadFill').style.width = p + '%';
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Upload ${p}%`;
       });
       data[key] = url;
     }
@@ -593,11 +640,10 @@ async function saveForm() {
       await addDoc(collection(db, k), { ...data, createdAt: serverTimestamp() });
     }
 
-    // Reload data
+    // Reload data dari Firestore
     const snap = await getDocs(collection(db, k));
     cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Log aktivitas
     saveActivity(editingId ? 'edit' : 'tambah', k, data.judul);
 
     closeForm();
@@ -632,7 +678,7 @@ async function hapusData(id) {
 }
 
 // ============================================================
-// ACTIVITY LOG (localStorage)
+// ACTIVITY LOG
 // ============================================================
 function saveActivity(action, kategori, judul) {
   const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
@@ -667,7 +713,7 @@ function renderActivity() {
 }
 
 // ============================================================
-// GLOBAL SEARCH (index)
+// GLOBAL SEARCH
 // ============================================================
 function globalSearch() {
   const q = $('globalSearch')?.value.trim();
@@ -696,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// EXPOSE ke global window (untuk onclick="...")
+// EXPOSE KE GLOBAL
 // ============================================================
 Object.assign(window, {
   showPage, toggleMenu, openLogin, closeLogin, doLogin, loginGuest,
@@ -708,7 +754,7 @@ Object.assign(window, {
 });
 
 // ============================================================
-// BOOTSTRAP PUBLIK (index.html)
+// BOOTSTRAP PUBLIK
 // ============================================================
 if (!isAdminPage()) {
   (async () => {
