@@ -1,11 +1,21 @@
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif; }
+/* ============================================================
+   TODDOPULI - STYLESHEET
+   Bapperida Kota Palopo
+   Tema: Biru Navy Profesional
+============================================================ */
+
+/* ==================== RESET & VARIABEL ==================== */
+* {
+  margin: 0; padding: 0; box-sizing: border-box;
+  font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif;
+}
 
 :root {
-  --primary: #1E3A8A;        /* Navy utama */
-  --primary-dark: #172554;   /* Navy gelap */
-  --primary-light: #3B82F6;  /* Blue terang */
-  --primary-soft: #DBEAFE;   /* Blue sangat muda */
-  --accent: #FBBF24;         /* Kuning aksen */
+  --primary: #1E3A8A;
+  --primary-dark: #172554;
+  --primary-light: #3B82F6;
+  --primary-soft: #DBEAFE;
+  --accent: #FBBF24;
   --accent-dark: #F59E0B;
   --light: #F8FAFC;
   --white: #FFFFFF;
@@ -14,15 +24,21 @@
   --border: #E2E8F0;
   --success: #059669;
   --danger: #DC2626;
+  --warning: #F59E0B;
   --shadow-sm: 0 1px 3px rgba(15,23,42,0.08);
   --shadow-md: 0 4px 12px rgba(15,23,42,0.08);
   --shadow-lg: 0 12px 30px rgba(30,58,138,0.15);
 }
 
 html { scroll-behavior: smooth; }
-body { background: var(--light); color: var(--dark); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+body {
+  background: var(--light); color: var(--dark);
+  line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
 .container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
 a { cursor: pointer; }
+img { max-width: 100%; display: block; }
+
 
 /* ==================== HEADER ==================== */
 .header {
@@ -43,6 +59,7 @@ a { cursor: pointer; }
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 20px;
   box-shadow: 0 4px 12px rgba(30,58,138,0.3);
+  flex-shrink: 0;
 }
 .logo-icon.big { width: 72px; height: 72px; font-size: 32px; margin: 0 auto 16px; }
 .logo h1 {
@@ -77,6 +94,7 @@ a { cursor: pointer; }
   width: 40px; height: 40px; border-radius: 10px;
 }
 
+
 /* ==================== HERO ==================== */
 .hero {
   position: relative; overflow: hidden;
@@ -108,10 +126,10 @@ a { cursor: pointer; }
   align-items: center; padding-left: 20px;
   position: relative;
 }
-.search-icon { color: var(--gray); font-size: 15px; }
+.search-icon { color: var(--gray); font-size: 15px; flex-shrink: 0; }
 .hero-search input {
-  flex: 1; border: none; padding: 16px 12px; font-size: 14px; outline: none;
-  font-family: inherit;
+  flex: 1; border: none; padding: 16px 12px; font-size: 14px;
+  outline: none; font-family: inherit;
 }
 .hero-search button {
   background: var(--accent); border: none; padding: 14px 28px;
@@ -134,11 +152,15 @@ a { cursor: pointer; }
 .stat h3 { font-size: 26px; color: #fff; font-weight: 800; line-height: 1; }
 .stat p { font-size: 11px; color: rgba(255,255,255,0.85); font-weight: 500; }
 
-/* ==================== MAIN ==================== */
+
+/* ==================== MAIN & PAGE ==================== */
 main { padding: 40px 16px 60px; }
 .page { display: none; }
 .page.active { display: block; animation: fadeIn 0.35s; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .section-title {
   font-size: 22px; color: var(--primary); margin-bottom: 24px;
@@ -150,6 +172,7 @@ main { padding: 40px 16px 60px; }
   width: 60px; height: 3px; background: var(--accent); border-radius: 2px;
 }
 .section-title i { margin-right: 8px; color: var(--primary-light); }
+
 
 /* ==================== GRID CARDS ==================== */
 .grid-cards {
@@ -164,10 +187,14 @@ main { padding: 40px 16px 60px; }
 }
 .card::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0;
-  height: 4px; background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
   transform: scaleX(0); transform-origin: left; transition: 0.3s;
 }
-.card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); border-color: var(--primary-soft); }
+.card:hover {
+  transform: translateY(-6px); box-shadow: var(--shadow-lg);
+  border-color: var(--primary-soft);
+}
 .card:hover::before { transform: scaleX(1); }
 .card-icon {
   width: 52px; height: 52px;
@@ -187,7 +214,8 @@ main { padding: 40px 16px 60px; }
 }
 .card:hover .card-arrow { opacity: 1; transform: translateX(0); }
 
-/* ==================== TOOLBAR ==================== */
+
+/* ==================== TOOLBAR (PUBLIK) ==================== */
 .toolbar {
   display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
   background: var(--white); padding: 12px; border-radius: 12px;
@@ -196,21 +224,78 @@ main { padding: 40px 16px 60px; }
 }
 .toolbar-icon {
   position: absolute; left: 26px; color: var(--gray); font-size: 13px;
-  pointer-events: none;
+  pointer-events: none; z-index: 1;
 }
-.toolbar:has(.toolbar-icon) input { padding-left: 36px; }
 .toolbar input, .toolbar select {
   flex: 1; min-width: 180px; padding: 11px 16px;
   border: 1px solid var(--border); border-radius: 10px;
   font-size: 14px; outline: none; font-family: inherit;
   transition: 0.2s; background: var(--light);
 }
+/* Input dengan icon di dalamnya */
+.toolbar > .toolbar-icon ~ input { padding-left: 36px; }
 .toolbar input:focus, .toolbar select:focus {
   border-color: var(--primary); background: #fff;
   box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
 }
 
-/* ==================== LIST GRID ==================== */
+/* ==================== TOOLBAR FLEX (ADMIN: search + actions) ==================== */
+.toolbar-flex {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.toolbar-flex .toolbar-search {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.toolbar-flex .toolbar-search input {
+  width: 100%;
+  padding: 11px 16px 11px 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  background: var(--light);
+  transition: 0.2s;
+}
+.toolbar-flex .toolbar-search input:focus {
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+}
+.toolbar-flex .toolbar-search .toolbar-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--gray);
+  font-size: 13px;
+  pointer-events: none;
+}
+.toolbar-flex > select {
+  flex: 0 0 auto;
+  min-width: 160px;
+  padding: 11px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  background: var(--light);
+  transition: 0.2s;
+}
+.toolbar-flex > select:focus {
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+}
+
+
+/* ==================== LIST GRID (KARTU DATA PUBLIK) ==================== */
 .list-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 16px;
@@ -224,7 +309,8 @@ main { padding: 40px 16px 60px; }
 }
 .item::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-  width: 4px; background: linear-gradient(180deg, var(--primary), var(--primary-light));
+  width: 4px;
+  background: linear-gradient(180deg, var(--primary), var(--primary-light));
 }
 .item:hover {
   transform: translateY(-4px); box-shadow: var(--shadow-lg);
@@ -254,6 +340,7 @@ main { padding: 40px 16px 60px; }
   font-size: 14px; grid-column: 1/-1;
 }
 
+
 /* ==================== BUTTONS ==================== */
 .btn-primary {
   background: var(--primary); color: #fff; border: none;
@@ -262,7 +349,10 @@ main { padding: 40px 16px 60px; }
   font-weight: 600; transition: 0.2s; font-family: inherit;
   box-shadow: 0 2px 8px rgba(30,58,138,0.2);
 }
-.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(30,58,138,0.3); }
+.btn-primary:hover {
+  background: var(--primary-dark); transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(30,58,138,0.3);
+}
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .btn-secondary {
   background: var(--white); color: var(--primary);
@@ -275,15 +365,17 @@ main { padding: 40px 16px 60px; }
 .btn-secondary:hover { background: var(--primary-soft); }
 .full { width: 100%; justify-content: center; }
 
+
 /* ==================== INFO BOX ==================== */
 .info-box {
   background: #EFF6FF; border-left: 4px solid var(--primary-light);
   padding: 14px 18px; border-radius: 10px; margin-bottom: 20px;
   display: flex; gap: 12px; align-items: flex-start;
 }
-.info-box i { color: var(--primary-light); font-size: 18px; margin-top: 2px; }
+.info-box i { color: var(--primary-light); font-size: 18px; margin-top: 2px; flex-shrink: 0; }
 .info-box p { font-size: 13px; color: var(--primary-dark); }
 .info-box a { color: var(--primary); font-weight: 700; text-decoration: underline; }
+
 
 /* ==================== MODAL ==================== */
 .modal {
@@ -301,11 +393,15 @@ main { padding: 40px 16px 60px; }
   box-shadow: 0 25px 60px rgba(0,0,0,0.3);
 }
 .modal-content.big { max-width: 620px; }
-@keyframes popIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes popIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 .close {
   position: absolute; top: 14px; right: 18px;
   font-size: 28px; cursor: pointer; color: var(--gray);
-  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
   border-radius: 8px; transition: 0.2s; line-height: 1;
 }
 .close:hover { background: var(--light); color: var(--danger); }
@@ -337,7 +433,11 @@ main { padding: 40px 16px 60px; }
   border-radius: 10px; font-size: 12px; margin-bottom: 16px;
   color: var(--primary-dark); text-align: center; line-height: 1.6;
 }
-.error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; font-weight: 500; }
+.error-msg {
+  color: var(--danger); font-size: 13px; margin-top: 10px;
+  text-align: center; font-weight: 500;
+}
+
 
 /* ==================== UPLOAD ==================== */
 .upload-box {
@@ -359,15 +459,20 @@ main { padding: 40px 16px 60px; }
   border-radius: 10px; margin-bottom: 12px;
 }
 .preview-file i { font-size: 24px; color: var(--primary); }
-.preview-file span { font-size: 13px; color: var(--primary-dark); font-weight: 600; flex: 1; word-break: break-all; }
+.preview-file span {
+  font-size: 13px; color: var(--primary-dark);
+  font-weight: 600; flex: 1; word-break: break-all;
+}
 .progress-bar {
   height: 6px; background: var(--border); border-radius: 3px;
   overflow: hidden; margin: 10px 0;
 }
 .progress-fill {
-  height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
   width: 0%; transition: width 0.3s; border-radius: 3px;
 }
+
 
 /* ==================== FOOTER ==================== */
 .footer {
@@ -392,7 +497,8 @@ main { padding: 40px 16px 60px; }
   padding-top: 20px; text-align: center;
 }
 
-/* ==================== AUTH SCREEN ==================== */
+
+/* ==================== AUTH SCREEN (LOGIN ADMIN) ==================== */
 .auth-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--primary-light) 100%);
@@ -403,6 +509,7 @@ main { padding: 40px 16px 60px; }
   background-image:
     radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 0%, transparent 40%),
     radial-gradient(circle at 80% 70%, rgba(251,191,36,0.15) 0%, transparent 45%);
+  pointer-events: none;
 }
 .auth-card {
   background: #fff; padding: 36px 28px; border-radius: 20px;
@@ -433,6 +540,7 @@ main { padding: 40px 16px 60px; }
 }
 .back-link:hover { color: var(--primary); }
 
+
 /* ==================== ADMIN LAYOUT ==================== */
 .admin-main { padding: 24px 16px 60px; }
 .admin-layout {
@@ -444,6 +552,8 @@ main { padding: 40px 16px 60px; }
   padding: 16px; box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
   position: sticky; top: 90px;
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
 }
 .sidebar-head {
   padding: 8px 12px 16px; border-bottom: 1px solid var(--border);
@@ -492,7 +602,8 @@ main { padding: 40px 16px 60px; }
   align-items: center; gap: 12px; flex-wrap: wrap;
 }
 
-/* STAT GRID */
+
+/* ==================== STAT GRID (DASHBOARD) ==================== */
 .stat-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 14px;
@@ -514,7 +625,8 @@ main { padding: 40px 16px 60px; }
 .stat-card h3 { font-size: 32px; color: var(--dark); font-weight: 800; line-height: 1; }
 .stat-card p { font-size: 12px; color: var(--gray); margin-top: 4px; font-weight: 500; }
 
-/* ACTIVITY LOG */
+
+/* ==================== ACTIVITY LOG ==================== */
 .activity-list {
   background: var(--light); border-radius: 12px;
   padding: 20px; min-height: 100px;
@@ -536,14 +648,16 @@ main { padding: 40px 16px 60px; }
 }
 .activity-item .time { color: var(--gray); font-size: 11px; margin-left: auto; }
 
-/* CRUD LIST */
+
+/* ==================== CRUD LIST (ADMIN) ==================== */
 .crud-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
 }
 .crud-item {
   background: var(--white); padding: 16px; border-radius: 12px;
-  border: 1px solid var(--border); border-left: 4px solid var(--primary);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
   box-shadow: var(--shadow-sm); transition: 0.2s;
 }
 .crud-item:hover { box-shadow: var(--shadow-md); }
@@ -576,52 +690,14 @@ main { padding: 40px 16px 60px; }
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   transition: 0.2s;
 }
+.crud-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-edit { background: var(--primary-soft); color: var(--primary); }
-.btn-edit:hover { background: var(--primary); color: #fff; }
+.btn-edit:hover:not(:disabled) { background: var(--primary); color: #fff; }
 .btn-del { background: #FEE2E2; color: var(--danger); }
-.btn-del:hover { background: var(--danger); color: #fff; }
+.btn-del:hover:not(:disabled) { background: var(--danger); color: #fff; }
 
-/* ==================== RESPONSIVE ==================== */
-@media (max-width: 900px) {
-  .nav {
-    display: none; position: absolute; top: 100%; left: 0; right: 0;
-    background: #fff; flex-direction: column; padding: 12px;
-    box-shadow: var(--shadow-lg); border-top: 1px solid var(--border);
-    gap: 2px;
-  }
-  .nav.show { display: flex; }
-  .hamburger { display: flex; align-items: center; justify-content: center; }
-  .hero h2 { font-size: 26px; }
-  .hero-stats { grid-template-columns: repeat(2, 1fr); }
-  .logo h1 { font-size: 15px; }
-  .admin-layout { grid-template-columns: 1fr; }
-  .admin-sidebar { position: static; }
-  .footer-grid { grid-template-columns: 1fr; gap: 20px; }
-}
 
-@media (max-width: 480px) {
-  .btn-login span { display: none; }
-  .btn-login { padding: 9px 12px; }
-  .hero { padding: 50px 16px; }
-  .hero h2 { font-size: 22px; }
-  .hero p { font-size: 14px; }
-  .hero-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .stat { padding: 12px; flex-direction: column; text-align: center; gap: 6px; }
-  .stat h3 { font-size: 20px; }
-  .stat i { font-size: 18px; }
-  .hero-search { flex-wrap: wrap; padding: 8px; border-radius: 14px; }
-  .hero-search input { padding: 10px 12px; width: 100%; }
-  .hero-search button { width: 100%; margin: 4px 0 0; border-radius: 10px; }
-  .section-title { font-size: 18px; }
-  .grid-cards { grid-template-columns: 1fr; }
-  .list-grid { grid-template-columns: 1fr; }
-  .crud-list { grid-template-columns: 1fr; }
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .modal-content { padding: 22px 18px; border-radius: 16px; }
-  .admin-content { padding: 18px; }
-}
-
-/* ============ CHARTS ============ */
+/* ==================== CHARTS (DASHBOARD) ==================== */
 .chart-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
   margin-bottom: 30px;
@@ -638,9 +714,11 @@ main { padding: 40px 16px 60px; }
 }
 .chart-card canvas { max-height: 240px; }
 
-/* ============ TOOLBAR ACTIONS ============ */
+
+/* ==================== TOOLBAR ACTIONS (EXPORT/IMPORT) ==================== */
 .toolbar-actions {
   display: flex; gap: 6px; margin-left: auto;
+  flex-wrap: wrap;
 }
 .btn-tool {
   background: var(--white); color: var(--primary);
@@ -655,8 +733,10 @@ main { padding: 40px 16px 60px; }
   background: var(--primary); color: #fff;
   border-color: var(--primary);
 }
+.btn-tool:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* ============ GALERI ============ */
+
+/* ==================== GALERI FOTO ==================== */
 .galeri-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -696,7 +776,8 @@ main { padding: 40px 16px 60px; }
   font-size: 10px; font-weight: 700;
 }
 
-/* ============ TOAST ============ */
+
+/* ==================== TOAST NOTIFICATION ==================== */
 .toast-container {
   position: fixed; top: 20px; right: 20px;
   z-index: 9999; display: flex; flex-direction: column; gap: 8px;
@@ -710,6 +791,7 @@ main { padding: 40px 16px 60px; }
   display: flex; align-items: flex-start; gap: 12px;
   animation: toastIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: auto;
+  transition: opacity 0.4s, transform 0.4s;
 }
 .toast.success { border-left-color: var(--success); }
 .toast.error { border-left-color: var(--danger); }
@@ -731,7 +813,8 @@ main { padding: 40px 16px 60px; }
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* ============ USER ROLE BADGE ============ */
+
+/* ==================== USER ROLE BADGE ==================== */
 .role-badge {
   display: inline-block; padding: 3px 10px;
   border-radius: 20px; font-size: 10px;
@@ -740,12 +823,80 @@ main { padding: 40px 16px 60px; }
 .role-super_admin { background: #FEE2E2; color: #DC2626; }
 .role-admin { background: #DBEAFE; color: #1E40AF; }
 .role-editor { background: #FEF3C7; color: #92400E; }
+.role-viewer { background: #F1F5F9; color: #64748B; }
 
-/* ============ RESPONSIVE ============ */
-@media (max-width: 768px) {
+
+/* ============================================================
+   RESPONSIVE - Semua media queries dikumpulkan di sini
+============================================================ */
+
+/* Tablet & mobile besar (max-width: 900px) */
+@media (max-width: 900px) {
+  .nav {
+    display: none; position: absolute; top: 100%; left: 0; right: 0;
+    background: #fff; flex-direction: column; padding: 12px;
+    box-shadow: var(--shadow-lg); border-top: 1px solid var(--border);
+    gap: 2px;
+  }
+  .nav.show { display: flex; }
+  .hamburger { display: flex; align-items: center; justify-content: center; }
+  .hero h2 { font-size: 26px; }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+  .logo h1 { font-size: 15px; }
+
+  .admin-layout { grid-template-columns: 1fr; }
+  .admin-sidebar { position: static; max-height: none; }
+  .footer-grid { grid-template-columns: 1fr; gap: 20px; }
+
   .chart-grid { grid-template-columns: 1fr; }
+  .galeri-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Mobile sedang (max-width: 600px) */
+@media (max-width: 600px) {
+  .toolbar-flex { flex-direction: column; align-items: stretch; }
+  .toolbar-flex .toolbar-search { min-width: 100%; }
+  .toolbar-flex .toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+  .toolbar-flex .toolbar-actions .btn-tool {
+    flex: 1;
+    justify-content: center;
+  }
+  .toolbar-actions { margin-left: 0; width: 100%; }
   .galeri-grid { grid-template-columns: repeat(2, 1fr); }
-  .toolbar-actions { width: 100%; justify-content: flex-end; }
+}
+
+/* Mobile kecil (max-width: 480px) */
+@media (max-width: 480px) {
+  .btn-login span { display: none; }
+  .btn-login { padding: 9px 12px; }
+
+  .hero { padding: 50px 16px; }
+  .hero h2 { font-size: 22px; }
+  .hero p { font-size: 14px; }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat { padding: 12px; flex-direction: column; text-align: center; gap: 6px; }
+  .stat h3 { font-size: 20px; }
+  .stat i { font-size: 18px; }
+  .hero-search { flex-wrap: wrap; padding: 8px; border-radius: 14px; }
+  .hero-search input { padding: 10px 12px; width: 100%; }
+  .hero-search button {
+    width: 100%; margin: 4px 0 0; border-radius: 10px;
+  }
+
+  .section-title { font-size: 18px; }
+  .grid-cards { grid-template-columns: 1fr; }
+  .list-grid { grid-template-columns: 1fr; }
+  .crud-list { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+
+  .modal-content { padding: 22px 18px; border-radius: 16px; }
+  .admin-content { padding: 18px; }
+  .galeri-grid { grid-template-columns: 1fr 1fr; }
+
   .toast-container { top: 10px; right: 10px; left: 10px; }
   .toast { min-width: auto; max-width: none; }
 }
