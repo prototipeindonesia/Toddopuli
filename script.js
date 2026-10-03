@@ -1,388 +1,724 @@
-/* ========================================
+/* ============================================================
    TODDOPULI - Script Utama
    Bapperida Kota Palopo
-======================================== */
+   Firebase Firestore + Auth + Storage
+============================================================ */
 
-// ===== DATA (LocalStorage-based) =====
-const DB = {
-  get: (key) => JSON.parse(localStorage.getItem('toddopuli_' + key) || 'null'),
-  set: (key, val) => localStorage.setItem('toddopuli_' + key, JSON.stringify(val))
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
+  getDocs, getDoc, query, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getStorage, ref, uploadBytesResumable, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+// ============================================================
+// ⚠️ GANTI DENGAN firebaseConfig MILIK ANDA (Langkah 1.5)
+// ============================================================
+const firebaseConfig = {
+  apiKey: "ISI_API_KEY_ANDA",
+  authDomain: "toddopuli.firebaseapp.com",
+  projectId: "toddopuli",
+  storageBucket: "toddopuli.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdef123456"
+};
+// ============================================================
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const storage = getStorage(app);
+
+// ============================================================
+// KONFIG KATEGORI & FIELD
+// ============================================================
+const KATEGORI = {
+  inovasi: {
+    nama: 'Inovasi', icon: 'fa-lightbulb',
+    fields: [
+      { key:'judul', label:'Judul Inovasi', type:'text', required:true },
+      { key:'opd', label:'OPD Pengusul', type:'text', required:true },
+      { key:'tahun', label:'Tahun', type:'text', required:true },
+      { key:'status', label:'Status', type:'select', options:['Aktif','Pilot','Draft','Selesai'] },
+      { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'gambar', label:'Gambar/Poster', type:'image' }
+    ]
+  },
+  riset: {
+    nama: 'Riset', icon: 'fa-flask',
+    fields: [
+      { key:'judul', label:'Judul Riset', type:'text', required:true },
+      { key:'peneliti', label:'Peneliti', type:'text', required:true },
+      { key:'tahun', label:'Tahun', type:'text', required:true },
+      { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'dokumen', label:'File Dokumen (PDF)', type:'file' }
+    ]
+  },
+  publikasi: {
+    nama: 'Publikasi', icon: 'fa-book',
+    fields: [
+      { key:'judul', label:'Judul Publikasi', type:'text', required:true },
+      { key:'jenis', label:'Jenis', type:'select', options:['Laporan','Jurnal','Profil','Buku','Artikel'] },
+      { key:'tahun', label:'Tahun', type:'text', required:true },
+      { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'dokumen', label:'File Publikasi (PDF)', type:'file' }
+    ]
+  },
+  hki: {
+    nama: 'HKI', icon: 'fa-certificate',
+    fields: [
+      { key:'judul', label:'Judul HKI', type:'text', required:true },
+      { key:'pemilik', label:'Pemilik', type:'text', required:true },
+      { key:'nomor', label:'Nomor Pendaftaran', type:'text', required:true },
+      { key:'tahun', label:'Tahun', type:'text', required:true },
+      { key:'jenis', label:'Jenis HKI', type:'select', options:['Hak Cipta','Merek','Paten','Desain Industri'] },
+      { key:'deskripsi', label:'Deskripsi', type:'textarea' },
+      { key:'sertifikat', label:'File Sertifikat (PDF)', type:'file' }
+    ]
+  },
+  berita: {
+    nama: 'Berita', icon: 'fa-newspaper',
+    fields: [
+      { key:'judul', label:'Judul Berita', type:'text', required:true },
+      { key:'tanggal', label:'Tanggal', type:'date', required:true },
+      { key:'deskripsi', label:'Isi Berita', type:'textarea', required:true },
+      { key:'gambar', label:'Gambar Berita', type:'image' }
+    ]
+  },
+  pelatihan: {
+    nama: 'Pelatihan', icon: 'fa-chalkboard-teacher',
+    fields: [
+      { key:'judul', label:'Judul Pelatihan', type:'text', required:true },
+      { key:'tanggal', label:'Tanggal Pelaksanaan', type:'date', required:true },
+      { key:'kuota', label:'Kuota Peserta', type:'text' },
+      { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'gambar', label:'Poster Pelatihan', type:'image' }
+    ]
+  },
+  database: {
+    nama: 'Database', icon: 'fa-database',
+    fields: [
+      { key:'judul', label:'Nama Dataset', type:'text', required:true },
+      { key:'kategori', label:'Kategori', type:'text', required:true },
+      { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'dokumen', label:'File Dataset', type:'file' }
+    ]
+  }
 };
 
-// Data seed awal
-function seedData() {
-  if (!DB.get('seeded')) {
-    DB.set('inovasi', [
-      {id:1, judul:'SiCantik - Sistem Cerdas Administrasi', opd:'Dinas Kominfo', tahun:'2024', deskripsi:'Inovasi digitalisasi pelayanan administrasi kependudukan.', status:'Aktif'},
-      {id:2, judul:'Layanan Jemput Bola Pajak', opd:'Bapenda', tahun:'2023', deskripsi:'Inovasi pelayanan pajak langsung ke masyarakat.', status:'Aktif'},
-      {id:3, judul:'Kampung Iklim Palopo', opd:'DLH', tahun:'2023', deskripsi:'Program kampung ramah lingkungan.', status:'Aktif'},
-      {id:4, judul:'Pasar Digital Palopo', opd:'Disperindag', tahun:'2024', deskripsi:'Platform digital untuk UMKM Palopo.', status:'Pilot'}
-    ]);
-    DB.set('riset', [
-      {id:1, judul:'Kajian Pengelolaan Sampah Kota Palopo', peneliti:'Tim BRIDA', tahun:'2024', deskripsi:'Riset strategis pengelolaan sampah berkelanjutan.'},
-      {id:2, judul:'Pemetaan Potensi Ekonomi Kreatif', peneliti:'Dr. Ahmad', tahun:'2023', deskripsi:'Riset pemetaan ekonomi kreatif daerah.'},
-      {id:3, judul:'Studi Transportasi Publik', peneliti:'Tim BRIDA', tahun:'2024', deskripsi:'Analisis kebutuhan transportasi publik Palopo.'}
-    ]);
-    DB.set('publikasi', [
-      {id:1, judul:'Laporan Kinerja Bapperida 2024', jenis:'Laporan', tahun:'2024', deskripsi:'Laporan tahunan kinerja Bapperida Kota Palopo.'},
-      {id:2, judul:'Jurnal Inovasi Daerah Vol. 1', jenis:'Jurnal', tahun:'2024', deskripsi:'Kumpulan artikel inovasi daerah.'},
-      {id:3, judul:'Profil Riset & Inovasi Palopo', jenis:'Profil', tahun:'2023', deskripsi:'Profil lengkap riset dan inovasi daerah.'}
-    ]);
-    DB.set('hki', [
-      {id:1, judul:'Aplikasi SiCantik', pemilik:'Dinas Kominfo', nomor:'EC002024001', tahun:'2024', jenis:'Hak Cipta'},
-      {id:2, judul:'Merek TODDOPULI', pemilik:'Bapperida', nomor:'IDM000987654', tahun:'2024', jenis:'Merek'}
-    ]);
-    DB.set('berita', [
-      {id:1, judul:'BRIDA Palopo Luncurkan TODDOPULI', tanggal:'2025-01-10', deskripsi:'Platform terintegrasi riset dan inovasi resmi diluncurkan.'},
-      {id:2, judul:'Pelatihan Digitalisasi OPD Digelar', tanggal:'2025-01-05', deskripsi:'Bapperida menggelar pelatihan digitalisasi untuk seluruh OPD.'},
-      {id:3, judul:'Kunjungan Kerja BRIDA Makassar', tanggal:'2024-12-20', deskripsi:'Studi tiru implementasi SIGAP BRIDA Makassar.'}
-    ]);
-    DB.set('pelatihan', [
-      {id:1, judul:'Pelatihan Penulisan Proposal Riset', tanggal:'2025-02-15', kuota:'30 orang', deskripsi:'Pelatihan penulisan proposal riset bagi ASN.'},
-      {id:2, judul:'Workshop Inovasi Pelayanan Publik', tanggal:'2025-03-10', kuota:'50 orang', deskripsi:'Workshop pengembangan inovasi pelayanan publik.'},
-      {id:3, judul:'Bimtek Pengelolaan HKI', tanggal:'2025-04-05', kuota:'25 orang', deskripsi:'Bimbingan teknis pengelolaan HKI.'}
-    ]);
-    DB.set('database', [
-      {id:1, judul:'Data OPD Kota Palopo', kategori:'Kelembagaan', deskripsi:'Daftar lengkap OPD Kota Palopo.'},
-      {id:2, judul:'Dataset Inovasi Daerah', kategori:'Inovasi', deskripsi:'Dataset inovasi seluruh OPD.'},
-      {id:3, judul:'Arsip Dokumen Riset', kategori:'Riset', deskripsi:'Arsip dokumen hasil riset.'},
-      {id:4, judul:'Data Pegawai BRIDA', kategori:'SDM', deskripsi:'Data pegawai BRIDA (terbatas).'}
-    ]);
-    DB.set('seeded', true);
-  }
-}
-seedData();
+// ============================================================
+// STATE GLOBAL
+// ============================================================
+let currentUser = null;
+let currentAdminPage = 'dashboard';
+let cachedData = {
+  inovasi:[], riset:[], publikasi:[], hki:[],
+  berita:[], pelatihan:[], database:[]
+};
+let editingId = null;
+let editingKategori = null;
+let pendingUploadFile = null;
 
-// ===== SESSION =====
-let currentUser = DB.get('session') || null;
-const ADMIN = { username: 'admin', password: 'admin123', role: 'admin' };
-const GUEST = { username: 'tamu', password: 'tamu', role: 'guest' };
+// ============================================================
+// UTIL
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const isAdminPage = () => !!$('adminApp');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// ===== NAVIGATION =====
-function showPage(page) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById('page-' + page);
-  if (target) target.classList.add('active');
-
-  document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-  event && event.target && event.target.classList && event.target.classList.add('active');
-
-  // Hero hanya di beranda
-  document.getElementById('heroSection').style.display = page === 'home' ? 'block' : 'none';
-
-  document.getElementById('navMenu').classList.remove('show');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  // Render sesuai halaman
-  if (page === 'inovasi') renderInovasi();
-  if (page === 'riset') renderRiset();
-  if (page === 'publikasi') renderPublikasi();
-  if (page === 'hki') renderHki();
-  if (page === 'berita') renderBerita();
-  if (page === 'pelatihan') renderPelatihan();
-  if (page === 'database') renderDatabase();
-  if (page === 'home') updateStats();
+function formatTanggal(t) {
+  if (!t) return '-';
+  try {
+    const d = new Date(t);
+    return d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
+  } catch { return t; }
 }
 
-function toggleMenu() {
-  document.getElementById('navMenu').classList.toggle('show');
+// ============================================================
+// AMBIL SEMUA DATA DARI FIRESTORE
+// ============================================================
+async function loadAllData() {
+  const keys = Object.keys(KATEGORI);
+  await Promise.all(keys.map(async (k) => {
+    try {
+      const snap = await getDocs(collection(db, k));
+      cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn('Gagal memuat', k, e);
+      cachedData[k] = [];
+    }
+  }));
 }
 
-// ===== STATS =====
+// ============================================================
+// RENDER PUBLIK (index.html)
+// ============================================================
 function updateStats() {
-  document.getElementById('statInovasi').textContent = (DB.get('inovasi') || []).length;
-  document.getElementById('statRiset').textContent = (DB.get('riset') || []).length;
-  document.getElementById('statHki').textContent = (DB.get('hki') || []).length;
-  document.getElementById('statBerita').textContent = (DB.get('berita') || []).length;
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('statInovasi', cachedData.inovasi.length);
+  set('statRiset', cachedData.riset.length);
+  set('statHki', cachedData.hki.length);
+  set('statBerita', cachedData.berita.length);
+  // Admin dashboard
+  set('dashInovasi', cachedData.inovasi.length);
+  set('dashRiset', cachedData.riset.length);
+  set('dashPub', cachedData.publikasi.length);
+  set('dashHki', cachedData.hki.length);
+  set('dashBerita', cachedData.berita.length);
+  set('dashPelatihan', cachedData.pelatihan.length);
+  set('dashDb', cachedData.database.length);
 }
-updateStats();
 
-// ===== RENDER FUNCTIONS =====
+function emptyMsg(text = 'Belum ada data.') {
+  return `<div class="loading"><i class="fas fa-inbox" style="font-size:36px;opacity:.4;display:block;margin-bottom:10px;"></i>${text}</div>`;
+}
+
+function buildCard(d, k, extraLabel = '') {
+  const img = d.gambar ? `<img class="thumb" src="${esc(d.gambar)}" alt="${esc(d.judul)}" loading="lazy">` : '';
+  const badge = extraLabel ? `<span class="badge">${esc(extraLabel)}</span>` : '';
+  return `<div class="item" onclick="showDetail('${k}','${d.id}')">
+    ${img}
+    <h4>${esc(d.judul)}</h4>
+    <p>${esc(d.deskripsi).substring(0,120)}${d.deskripsi?.length>120?'...':''}</p>
+    ${badge}
+  </div>`;
+}
+
 function renderInovasi() {
-  const q = (document.getElementById('searchInovasi')?.value || '').toLowerCase();
-  const th = document.getElementById('filterTahunInovasi')?.value || '';
-  let data = DB.get('inovasi') || [];
-  if (q) data = data.filter(d => d.judul.toLowerCase().includes(q) || d.opd.toLowerCase().includes(q));
-  if (th) data = data.filter(d => d.tahun === th);
-  document.getElementById('listInovasi').innerHTML = data.length ? data.map(d => `
-    <div class="item" onclick="showDetail('Inovasi', ${d.id}, 'inovasi')">
-      <h4>${d.judul}</h4>
-      <p>${d.deskripsi}</p>
-      <span class="badge">${d.opd} • ${d.tahun}</span>
-      <div class="meta">Status: ${d.status}</div>
-    </div>
-  `).join('') : '<p>Belum ada data inovasi.</p>';
+  const q = ($('searchInovasi')?.value || '').toLowerCase();
+  const th = $('filterTahunInovasi')?.value || '';
+  let d = cachedData.inovasi;
+  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q) || (x.opd||'').toLowerCase().includes(q));
+  if (th) d = d.filter(x => x.tahun === th);
+  $('listInovasi').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'inovasi', `${x.opd} • ${x.tahun}`)).join('')
+    : emptyMsg('Belum ada data inovasi.');
 }
 
 function renderRiset() {
-  const q = (document.getElementById('searchRiset')?.value || '').toLowerCase();
-  let data = DB.get('riset') || [];
-  if (q) data = data.filter(d => d.judul.toLowerCase().includes(q));
-  document.getElementById('listRiset').innerHTML = data.length ? data.map(d => `
-    <div class="item" onclick="showDetail('Riset', ${d.id}, 'riset')">
-      <h4>${d.judul}</h4>
-      <p>${d.deskripsi}</p>
-      <span class="badge">${d.peneliti} • ${d.tahun}</span>
-    </div>
-  `).join('') : '<p>Belum ada data riset.</p>';
+  const q = ($('searchRiset')?.value || '').toLowerCase();
+  let d = cachedData.riset;
+  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  $('listRiset').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'riset', `${x.peneliti} • ${x.tahun}`)).join('')
+    : emptyMsg('Belum ada data riset.');
 }
 
 function renderPublikasi() {
-  const q = (document.getElementById('searchPub')?.value || '').toLowerCase();
-  let data = DB.get('publikasi') || [];
-  if (q) data = data.filter(d => d.judul.toLowerCase().includes(q));
-  document.getElementById('listPublikasi').innerHTML = data.length ? data.map(d => `
-    <div class="item" onclick="showDetail('Publikasi', ${d.id}, 'publikasi')">
-      <h4>${d.judul}</h4>
-      <p>${d.deskripsi}</p>
-      <span class="badge">${d.jenis} • ${d.tahun}</span>
-    </div>
-  `).join('') : '<p>Belum ada publikasi.</p>';
+  const q = ($('searchPub')?.value || '').toLowerCase();
+  let d = cachedData.publikasi;
+  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  $('listPublikasi').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'publikasi', `${x.jenis} • ${x.tahun}`)).join('')
+    : emptyMsg('Belum ada publikasi.');
 }
 
 function renderHki() {
-  const q = (document.getElementById('searchHki')?.value || '').toLowerCase();
-  let data = DB.get('hki') || [];
-  if (q) data = data.filter(d => d.judul.toLowerCase().includes(q));
-  document.getElementById('listHki').innerHTML = data.length ? data.map(d => `
-    <div class="item">
-      <h4>${d.judul}</h4>
-      <p>Pemilik: ${d.pemilik}<br>No: ${d.nomor}</p>
-      <span class="badge">${d.jenis} • ${d.tahun}</span>
-      ${currentUser?.role === 'admin' ? `
-      <div class="actions">
-        <button onclick="event.stopPropagation();editItem('hki',${d.id})">Edit</button>
-        <button class="danger" onclick="event.stopPropagation();delItem('hki',${d.id})">Hapus</button>
-      </div>` : ''}
-    </div>
-  `).join('') : '<p>Belum ada data HKI.</p>';
+  const q = ($('searchHki')?.value || '').toLowerCase();
+  let d = cachedData.hki;
+  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  $('listHki').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'hki', `${x.jenis} • ${x.tahun}`)).join('')
+    : emptyMsg('Belum ada data HKI.');
 }
 
 function renderBerita() {
-  const data = DB.get('berita') || [];
-  document.getElementById('listBerita').innerHTML = data.length ? data.map(d => `
-    <div class="item" onclick="showDetail('Berita', ${d.id}, 'berita')">
-      <h4>${d.judul}</h4>
-      <p>${d.deskripsi}</p>
-      <div class="meta"><i class="fas fa-calendar"></i> ${d.tanggal}</div>
-    </div>
-  `).join('') : '<p>Belum ada berita.</p>';
+  const d = cachedData.berita;
+  $('listBerita').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'berita', formatTanggal(x.tanggal))).join('')
+    : emptyMsg('Belum ada berita.');
 }
 
 function renderPelatihan() {
-  const q = (document.getElementById('searchPelatihan')?.value || '').toLowerCase();
-  let data = DB.get('pelatihan') || [];
-  if (q) data = data.filter(d => d.judul.toLowerCase().includes(q));
-  document.getElementById('listPelatihan').innerHTML = data.length ? data.map(d => `
-    <div class="item" onclick="showDetail('Pelatihan', ${d.id}, 'pelatihan')">
-      <h4>${d.judul}</h4>
-      <p>${d.deskripsi}</p>
-      <span class="badge">${d.tanggal}</span>
-      <div class="meta">Kuota: ${d.kuota}</div>
-    </div>
-  `).join('') : '<p>Belum ada pelatihan.</p>';
+  const q = ($('searchPelatihan')?.value || '').toLowerCase();
+  let d = cachedData.pelatihan;
+  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  $('listPelatihan').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'pelatihan', formatTanggal(x.tanggal))).join('')
+    : emptyMsg('Belum ada pelatihan.');
 }
 
 function renderDatabase() {
-  const q = (document.getElementById('searchDb')?.value || '').toLowerCase();
-  let data = DB.get('database') || [];
-  if (q) data = data.filter(d => d.judul.toLowerCase().includes(q));
-  document.getElementById('listDatabase').innerHTML = data.length ? data.map(d => `
-    <div class="item">
-      <h4>${d.judul}</h4>
-      <p>${d.deskripsi}</p>
-      <span class="badge">${d.kategori}</span>
-    </div>
-  `).join('') : '<p>Belum ada data.</p>';
+  const q = ($('searchDb')?.value || '').toLowerCase();
+  let d = cachedData.database;
+  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  $('listDatabase').innerHTML = d.length
+    ? d.map(x => buildCard(x, 'database', x.kategori)).join('')
+    : emptyMsg('Belum ada data.');
 }
 
-// ===== DETAIL =====
-function showDetail(label, id, key) {
-  const data = (DB.get(key) || []).find(d => d.id === id);
-  if (!data) return;
-  let html = `<h2>${data.judul}</h2>`;
-  for (const k in data) {
-    if (k === 'id' || k === 'judul') continue;
-    html += `<p><b>${k.charAt(0).toUpperCase() + k.slice(1)}:</b> ${data[k]}</p>`;
+// ============================================================
+// NAVIGASI HALAMAN PUBLIK
+// ============================================================
+function showPage(page, e) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = $('page-' + page);
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+  const el = e?.target || document.querySelector(`.nav-link[onclick*="'${page}'"]`);
+  if (el) el.classList.add('active');
+
+  const hero = $('heroSection');
+  if (hero) hero.style.display = page === 'home' ? 'block' : 'none';
+
+  $('navMenu')?.classList.remove('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  const map = {
+    inovasi: renderInovasi, riset: renderRiset, publikasi: renderPublikasi,
+    hki: renderHki, berita: renderBerita, pelatihan: renderPelatihan,
+    database: renderDatabase
+  };
+  if (map[page]) map[page]();
+  if (page === 'home') updateStats();
+}
+
+function toggleMenu() { $('navMenu')?.classList.toggle('show'); }
+
+// ============================================================
+// DETAIL MODAL
+// ============================================================
+function showDetail(k, id) {
+  const d = cachedData[k]?.find(x => x.id === id);
+  if (!d) return;
+  const cfg = KATEGORI[k];
+  let html = `<h2>${esc(d.judul)}</h2>`;
+  if (d.gambar) {
+    html += `<img class="preview-img" src="${esc(d.gambar)}" alt="">`;
   }
-  document.getElementById('detailContent').innerHTML = html;
-  document.getElementById('detailModal').classList.add('show');
+  cfg.fields.forEach(f => {
+    if (['judul','gambar','dokumen','sertifikat'].includes(f.key)) return;
+    if (d[f.key] != null && d[f.key] !== '') {
+      const val = f.type === 'date' ? formatTanggal(d[f.key]) : esc(d[f.key]);
+      html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
+    }
+  });
+  // File
+  if (d.dokumen) {
+    html += `<a href="${esc(d.dokumen)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
+  }
+  if (d.sertifikat) {
+    html += `<a href="${esc(d.sertifikat)}" target="_blank" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
+  }
+  $('detailContent').innerHTML = html;
+  $('detailModal').classList.add('show');
 }
-function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
+function closeDetail() { $('detailModal')?.classList.remove('show'); }
 
-// ===== LOGIN =====
+// ============================================================
+// LOGIN PUBLIK (index.html)
+// ============================================================
 function openLogin() {
   if (currentUser) {
-    if (confirm('Logout dari TODDOPULI?')) {
-      currentUser = null;
-      DB.set('session', null);
-      updateLoginButton();
-      alert('Berhasil logout.');
-    }
+    if (confirm('Logout dari TODDOPULI?')) authLogout();
     return;
   }
-  document.getElementById('loginModal').classList.add('show');
+  $('loginModal').classList.add('show');
 }
-function closeLogin() { document.getElementById('loginModal').classList.remove('show'); }
+function closeLogin() { $('loginModal')?.classList.remove('show'); }
 
-function doLogin() {
-  const u = document.getElementById('loginUser').value.trim();
-  const p = document.getElementById('loginPass').value.trim();
-  const err = document.getElementById('loginError');
-
-  if (u === ADMIN.username && p === ADMIN.password) {
-    currentUser = ADMIN;
-    DB.set('session', currentUser);
-    err.textContent = '';
+async function doLogin() {
+  const email = $('loginEmail').value.trim();
+  const pass = $('loginPass').value.trim();
+  const err = $('loginError');
+  if (!email || !pass) { err.textContent = 'Email dan password wajib diisi!'; return; }
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
     closeLogin();
-    updateLoginButton();
-    alert('Login sebagai ADMIN berhasil!');
-    showPage('home');
-  } else if (u === GUEST.username && p === GUEST.password) {
-    currentUser = GUEST;
-    DB.set('session', currentUser);
-    err.textContent = '';
-    closeLogin();
-    updateLoginButton();
-    alert('Login sebagai Pengunjung berhasil!');
-  } else {
-    err.textContent = 'Username atau password salah!';
+    alert('Login berhasil! Anda dapat mengakses Panel Admin.');
+    window.location.href = 'admin.html';
+  } catch (e) {
+    err.textContent = 'Login gagal: ' + (e.code === 'auth/invalid-credential' ? 'Email atau password salah.' : e.message);
   }
 }
 
 function loginGuest() {
-  currentUser = GUEST;
-  DB.set('session', currentUser);
   closeLogin();
-  updateLoginButton();
-  alert('Masuk sebagai Pengunjung.');
+  alert('Anda masuk sebagai Pengunjung. Semua fitur publik dapat diakses.');
 }
 
-function updateLoginButton() {
-  const btn = document.getElementById('loginBtn');
-  if (currentUser) {
-    btn.innerHTML = `<i class="fas fa-user-check"></i> ${currentUser.username} (${currentUser.role})`;
-  } else {
-    btn.innerHTML = `<i class="fas fa-user"></i> Login`;
+// ============================================================
+// AUTH STATE
+// ============================================================
+onAuthStateChanged(auth, (user) => {
+  currentUser = user;
+  // Update tombol login di publik
+  const btn = $('loginBtn');
+  if (btn) {
+    if (user) {
+      btn.innerHTML = `<i class="fas fa-user-shield"></i> <span>${esc(user.email.split('@')[0])}</span>`;
+      btn.onclick = () => { if (confirm('Buka Panel Admin?')) location.href='admin.html'; };
+    } else {
+      btn.innerHTML = `<i class="fas fa-user"></i> <span>Login</span>`;
+      btn.onclick = openLogin;
+    }
+  }
+  // Halaman admin
+  if (isAdminPage()) {
+    if (user) {
+      $('authScreen').style.display = 'none';
+      $('adminApp').style.display = 'block';
+      $('userEmail').textContent = user.email;
+      initAdmin();
+    } else {
+      $('authScreen').style.display = 'flex';
+      $('adminApp').style.display = 'none';
+    }
+  }
+});
+
+// ============================================================
+// HALAMAN ADMIN
+// ============================================================
+async function authLogin() {
+  const email = $('authEmail').value.trim();
+  const pass = $('authPass').value.trim();
+  const err = $('authError');
+  if (!email || !pass) { err.textContent = 'Email & password wajib diisi!'; return; }
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (e) {
+    err.textContent = 'Login gagal: ' + (e.code === 'auth/invalid-credential' ? 'Email atau password salah.' : e.message);
   }
 }
-updateLoginButton();
 
-// ===== ADMIN FORM =====
-let adminFormCtx = { key: null, editId: null };
+async function authLogout() {
+  if (!confirm('Yakin logout?')) return;
+  await signOut(auth);
+  location.href = 'index.html';
+}
 
-function openAdminForm(key) {
-  if (currentUser?.role !== 'admin') {
-    alert('Fitur ini hanya untuk Admin!');
+async function initAdmin() {
+  await loadAllData();
+  updateStats();
+  renderActivity();
+  showAdminPage('dashboard');
+}
+
+const PAGE_TITLES = {
+  dashboard: ['Dashboard', 'Ringkasan data TODDOPULI'],
+  inovasi: ['Inovasi', 'Kelola data inovasi daerah'],
+  riset: ['Riset', 'Kelola hasil riset & kajian'],
+  publikasi: ['Publikasi', 'Kelola dokumen publikasi'],
+  hki: ['HKI', 'Kelola Hak Kekayaan Intelektual'],
+  berita: ['Berita', 'Kelola berita & informasi'],
+  pelatihan: ['Pelatihan', 'Kelola program pelatihan'],
+  database: ['Database', 'Kelola dataset & dokumen']
+};
+
+function showAdminPage(page, btn) {
+  currentAdminPage = page;
+  document.querySelectorAll('.adm-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.side-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  if (page === 'dashboard') {
+    $('adm-dashboard').classList.add('active');
+    updateStats();
+  } else {
+    $('adm-crud').classList.add('active');
+    const [t, s] = PAGE_TITLES[page] || ['Kelola Data',''];
+    $('crudTitle').innerHTML = `<i class="fas ${KATEGORI[page].icon}"></i> ${t}`;
+    $('crudSubtitle').textContent = s;
+    $('crudSearch').value = '';
+    renderCrud();
+  }
+}
+
+function renderCrud() {
+  const k = currentAdminPage;
+  if (k === 'dashboard') return;
+  const q = ($('crudSearch')?.value || '').toLowerCase();
+  let list = cachedData[k] || [];
+  if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
+
+  $('crudList').innerHTML = list.length
+    ? list.map(d => {
+      const img = d.gambar ? `<img class="thumb" src="${esc(d.gambar)}" alt="">` : '';
+      const badge = d.opd || d.jenis || d.kategori || d.peneliti || d.pemilik;
+      const date = d.tanggal ? formatTanggal(d.tanggal) : d.tahun;
+      return `<div class="crud-item">
+        ${img}
+        <h4>${esc(d.judul)}</h4>
+        <p>${esc(d.deskripsi||'').substring(0,100)}${d.deskripsi?.length>100?'...':''}</p>
+        ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
+        ${date ? `<div class="meta" style="font-size:11px;color:#94A3B8;margin-top:6px;"><i class="fas fa-calendar"></i> ${esc(date)}</div>` : ''}
+        <div class="crud-actions">
+          <button class="btn-edit" onclick="openForm('${d.id}')"><i class="fas fa-pen"></i> Edit</button>
+          <button class="btn-del" onclick="hapusData('${d.id}')"><i class="fas fa-trash"></i> Hapus</button>
+        </div>
+      </div>`;
+    }).join('')
+    : emptyMsg('Belum ada data.');
+}
+
+// ============================================================
+// FORM MODAL (Tambah/Edit)
+// ============================================================
+function openForm(id = null) {
+  const k = currentAdminPage;
+  if (k === 'dashboard') return;
+  editingKategori = k;
+  editingId = id;
+  pendingUploadFile = null;
+
+  const cfg = KATEGORI[k];
+  $('formTitle').innerHTML = `<i class="fas ${cfg.icon}"></i> ${id ? 'Edit' : 'Tambah'} ${cfg.nama}`;
+
+  const d = id ? cachedData[k].find(x => x.id === id) : {};
+  let html = '';
+  cfg.fields.forEach(f => {
+    const val = d?.[f.key] ?? '';
+    const req = f.required ? 'required' : '';
+    html += `<label>${f.label}${f.required?' <span style="color:#DC2626">*</span>':''}</label>`;
+
+    if (f.type === 'textarea') {
+      html += `<textarea id="f_${f.key}" ${req} placeholder="${f.label}...">${esc(val)}</textarea>`;
+    } else if (f.type === 'select') {
+      html += `<select id="f_${f.key}" ${req}>`;
+      f.options.forEach(o => {
+        html += `<option value="${esc(o)}" ${val===o?'selected':''}>${esc(o)}</option>`;
+      });
+      html += `</select>`;
+    } else if (f.type === 'image') {
+      html += `
+        <div class="upload-box" onclick="document.getElementById('file_${f.key}').click()">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <p>Tap untuk pilih gambar</p>
+          <small>JPG/PNG • Maks 5MB</small>
+        </div>
+        <input type="file" id="file_${f.key}" accept="image/*" style="display:none" onchange="handleFilePick(this,'${f.key}','image')">
+        <div id="prev_${f.key}">${val ? `<img class="preview-img" src="${esc(val)}" alt="">` : ''}</div>
+      `;
+    } else if (f.type === 'file') {
+      html += `
+        <div class="upload-box" onclick="document.getElementById('file_${f.key}').click()">
+          <i class="fas fa-file-upload"></i>
+          <p>Tap untuk pilih file</p>
+          <small>PDF/DOC/XLS • Maks 10MB</small>
+        </div>
+        <input type="file" id="file_${f.key}" accept=".pdf,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleFilePick(this,'${f.key}','file')">
+        <div id="prev_${f.key}">${val ? `
+          <div class="preview-file">
+            <i class="fas fa-file-pdf"></i>
+            <span>File sudah tersimpan</span>
+            <a href="${esc(val)}" target="_blank" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a>
+          </div>` : ''}</div>
+        <input type="hidden" id="f_${f.key}" value="${esc(val)}">
+      `;
+    } else {
+      html += `<input type="${f.type}" id="f_${f.key}" value="${esc(val)}" ${req} placeholder="${f.label}...">`;
+    }
+  });
+  $('formFields').innerHTML = html;
+  $('formModal').classList.add('show');
+}
+
+function closeForm() { $('formModal')?.classList.remove('show'); editingId = null; }
+
+function handleFilePick(input, key, kind) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const max = kind === 'image' ? 5 : 10;
+  if (file.size > max * 1024 * 1024) {
+    alert(`Ukuran file maksimal ${max}MB`);
+    input.value = '';
     return;
   }
-  adminFormCtx = { key, editId: null };
-  document.getElementById('adminFormTitle').textContent = 'Tambah Data ' + key.toUpperCase();
-  let fields = '';
-  const templates = {
-    inovasi: ['judul','opd','tahun','deskripsi','status'],
-    riset: ['judul','peneliti','tahun','deskripsi'],
-    publikasi: ['judul','jenis','tahun','deskripsi'],
-    hki: ['judul','pemilik','nomor','tahun','jenis'],
-    berita: ['judul','tanggal','deskripsi'],
-    pelatihan: ['judul','tanggal','kuota','deskripsi'],
-    database: ['judul','kategori','deskripsi']
-  };
-  (templates[key] || []).forEach(f => {
-    if (f === 'deskripsi') {
-      fields += `<textarea id="f_${f}" placeholder="${f}"></textarea>`;
-    } else {
-      fields += `<input id="f_${f}" placeholder="${f}">`;
-    }
-  });
-  document.getElementById('adminFormFields').innerHTML = fields;
-  document.getElementById('adminModal').classList.add('show');
-}
-
-function closeAdminForm() { document.getElementById('adminModal').classList.remove('show'); }
-
-function saveAdminForm() {
-  const { key, editId } = adminFormCtx;
-  const data = DB.get(key) || [];
-  const obj = { id: editId || Date.now() };
-  document.querySelectorAll('#adminFormFields [id^="f_"]').forEach(el => {
-    obj[el.id.slice(2)] = el.value;
-  });
-  if (editId) {
-    const idx = data.findIndex(d => d.id === editId);
-    data[idx] = obj;
+  pendingUploadFile = { file, key, kind };
+  const prev = $('prev_' + key);
+  if (kind === 'image') {
+    const url = URL.createObjectURL(file);
+    prev.innerHTML = `<img class="preview-img" src="${url}" alt="">`;
   } else {
-    data.push(obj);
+    prev.innerHTML = `<div class="preview-file"><i class="fas fa-file"></i><span>${esc(file.name)}</span></div>`;
   }
-  DB.set(key, data);
-  closeAdminForm();
-  alert('Data tersimpan!');
-  // Refresh tampilan
-  if (key === 'inovasi') renderInovasi();
-  if (key === 'riset') renderRiset();
-  if (key === 'publikasi') renderPublikasi();
-  if (key === 'hki') renderHki();
-  if (key === 'berita') renderBerita();
-  if (key === 'pelatihan') renderPelatihan();
-  if (key === 'database') renderDatabase();
-  updateStats();
 }
 
-function editItem(key, id) {
-  if (currentUser?.role !== 'admin') return alert('Hanya Admin!');
-  const item = (DB.get(key) || []).find(d => d.id === id);
-  if (!item) return;
-  adminFormCtx = { key, editId: id };
-  document.getElementById('adminFormTitle').textContent = 'Edit ' + key.toUpperCase();
-  let fields = '';
-  Object.keys(item).forEach(f => {
-    if (f === 'id') return;
-    if (f === 'deskripsi') {
-      fields += `<textarea id="f_${f}" placeholder="${f}">${item[f]}</textarea>`;
-    } else {
-      fields += `<input id="f_${f}" placeholder="${f}" value="${item[f]}">`;
-    }
+async function uploadFile(file, path, onProgress) {
+  return new Promise((resolve, reject) => {
+    const r = ref(storage, path);
+    const task = uploadBytesResumable(r, file);
+    task.on('state_changed',
+      (s) => onProgress?.(Math.round((s.bytesTransferred / s.totalBytes) * 100)),
+      reject,
+      async () => resolve(await getDownloadURL(task.snapshot.ref))
+    );
   });
-  document.getElementById('adminFormFields').innerHTML = fields;
-  document.getElementById('adminModal').classList.add('show');
 }
 
-function delItem(key, id) {
-  if (currentUser?.role !== 'admin') return alert('Hanya Admin!');
-  if (!confirm('Hapus data ini?')) return;
-  const data = (DB.get(key) || []).filter(d => d.id !== id);
-  DB.set(key, data);
-  if (key === 'hki') renderHki();
-  updateStats();
-  alert('Data dihapus.');
+async function saveForm() {
+  const k = editingKategori;
+  if (!k) return;
+  const cfg = KATEGORI[k];
+  const btn = $('saveBtn');
+
+  // Validasi & kumpulkan data
+  const data = {};
+  for (const f of cfg.fields) {
+    if (f.type === 'image' || f.type === 'file') continue;
+    const el = $('f_' + f.key);
+    const v = el ? el.value.trim() : '';
+    if (f.required && !v) { alert(`Field "${f.label}" wajib diisi!`); return; }
+    data[f.key] = v;
+  }
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+    // Upload file jika ada
+    if (pendingUploadFile) {
+      const { file, key, kind } = pendingUploadFile;
+      const ext = file.name.split('.').pop();
+      const path = `${k}/${Date.now()}_${key}.${ext}`;
+      $('uploadProgress').style.display = 'block';
+      const url = await uploadFile(file, path, (p) => {
+        $('uploadFill').style.width = p + '%';
+      });
+      data[key] = url;
+    }
+
+    // Simpan ke Firestore
+    if (editingId) {
+      await updateDoc(doc(db, k, editingId), { ...data, updatedAt: serverTimestamp() });
+    } else {
+      await addDoc(collection(db, k), { ...data, createdAt: serverTimestamp() });
+    }
+
+    // Reload data
+    const snap = await getDocs(collection(db, k));
+    cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Log aktivitas
+    saveActivity(editingId ? 'edit' : 'tambah', k, data.judul);
+
+    closeForm();
+    renderCrud();
+    updateStats();
+    alert('Data berhasil disimpan!');
+  } catch (e) {
+    console.error(e);
+    alert('Gagal menyimpan: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Simpan Data';
+    $('uploadProgress').style.display = 'none';
+    $('uploadFill').style.width = '0%';
+  }
 }
 
-// ===== GLOBAL SEARCH =====
+async function hapusData(id) {
+  const k = currentAdminPage;
+  if (!confirm('Yakin hapus data ini?')) return;
+  try {
+    const item = cachedData[k].find(x => x.id === id);
+    await deleteDoc(doc(db, k, id));
+    cachedData[k] = cachedData[k].filter(x => x.id !== id);
+    saveActivity('hapus', k, item?.judul || '');
+    renderCrud();
+    updateStats();
+    alert('Data dihapus.');
+  } catch (e) {
+    alert('Gagal hapus: ' + e.message);
+  }
+}
+
+// ============================================================
+// ACTIVITY LOG (localStorage)
+// ============================================================
+function saveActivity(action, kategori, judul) {
+  const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
+  log.unshift({
+    action, kategori, judul,
+    time: new Date().toISOString(),
+    user: currentUser?.email || 'unknown'
+  });
+  localStorage.setItem('toddopuli_log', JSON.stringify(log.slice(0, 20)));
+}
+
+function renderActivity() {
+  const el = $('activityLog');
+  if (!el) return;
+  const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
+  if (!log.length) {
+    el.innerHTML = '<p class="empty"><i class="fas fa-clock" style="font-size:24px;opacity:.4;display:block;margin-bottom:8px;"></i>Belum ada aktivitas.</p>';
+    return;
+  }
+  el.innerHTML = log.map(a => {
+    const iconMap = { tambah:'fa-plus', edit:'fa-pen', hapus:'fa-trash' };
+    const colorMap = { tambah:'#059669', edit:'#F59E0B', hapus:'#DC2626' };
+    const t = new Date(a.time).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    return `<div class="activity-item">
+      <i class="fas ${iconMap[a.action]||'fa-circle'}" style="background:${(colorMap[a.action]||'#64748B')}20;color:${colorMap[a.action]||'#64748B'};"></i>
+      <div>
+        <b>${esc(a.action.toUpperCase())}</b> ${esc(a.kategori)} — ${esc(a.judul)}
+        <div class="time">${t}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// GLOBAL SEARCH (index)
+// ============================================================
 function globalSearch() {
-  const q = document.getElementById('globalSearch').value.trim();
-  if (!q) return alert('Masukkan kata kunci.');
-  // Cari di semua kategori
-  const results = [];
-  ['inovasi','riset','publikasi','hki','berita','pelatihan','database'].forEach(k => {
-    (DB.get(k) || []).forEach(d => {
-      if (d.judul.toLowerCase().includes(q.toLowerCase())) results.push({k, d});
+  const q = $('globalSearch')?.value.trim();
+  if (!q) return alert('Masukkan kata kunci pencarian.');
+  const res = [];
+  Object.entries(cachedData).forEach(([k, list]) => {
+    list.forEach(d => {
+      if ((d.judul||'').toLowerCase().includes(q.toLowerCase())) {
+        res.push(`• [${KATEGORI[k].nama}] ${d.judul}`);
+      }
     });
   });
-  if (!results.length) return alert('Tidak ditemukan hasil untuk: ' + q);
-  alert('Ditemukan ' + results.length + ' hasil:\n\n' + results.map(r => '• [' + r.k.toUpperCase() + '] ' + r.d.judul).join('\n'));
+  alert(res.length ? `Ditemukan ${res.length} hasil:\n\n${res.slice(0,10).join('\n')}${res.length>10?'\n...':''}` : 'Tidak ditemukan hasil untuk: ' + q);
 }
 
-// Enter untuk search
-document.getElementById('globalSearch').addEventListener('keypress', e => {
-  if (e.key === 'Enter') globalSearch();
-});
-
-// Close modal saat klik luar
-document.querySelectorAll('.modal').forEach(m => {
-  m.addEventListener('click', e => {
-    if (e.target === m) m.classList.remove('show');
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  $('globalSearch')?.addEventListener('keypress', e => { if (e.key === 'Enter') globalSearch(); });
+  $('loginPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+  $('authPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') authLogin(); });
+  document.querySelectorAll('.modal').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
   });
 });
 
-// Init halaman
-showPage('home');
+// ============================================================
+// EXPOSE ke global window (untuk onclick="...")
+// ============================================================
+Object.assign(window, {
+  showPage, toggleMenu, openLogin, closeLogin, doLogin, loginGuest,
+  showDetail, closeDetail, globalSearch,
+  authLogin, authLogout, showAdminPage, openForm, closeForm, saveForm,
+  hapusData, handleFilePick,
+  renderInovasi, renderRiset, renderPublikasi, renderHki,
+  renderBerita, renderPelatihan, renderDatabase, renderCrud
+});
+
+// ============================================================
+// BOOTSTRAP PUBLIK (index.html)
+// ============================================================
+if (!isAdminPage()) {
+  (async () => {
+    try {
+      await loadAllData();
+      updateStats();
+      renderInovasi(); renderRiset(); renderPublikasi();
+      renderHki(); renderBerita(); renderPelatihan(); renderDatabase();
+    } catch (e) {
+      console.error('Init error:', e);
+      alert('Gagal memuat data. Periksa koneksi & konfigurasi Firebase.');
+    }
+  })();
+}
