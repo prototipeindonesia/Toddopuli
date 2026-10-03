@@ -27,14 +27,15 @@ const firebaseConfig = {
 };
 
 // ============================================================
-// ⚠️ KONFIGURASI CLOUDINARY — GANTI DENGAN MILIK ANDA
+// KONFIGURASI CLOUDINARY
 // ============================================================
-const CLOUDINARY_CLOUD = "vsuyvv7v";              // ← Cloud name Anda
-const CLOUDINARY_PRESET = "toddopuli_unsigned";    // ← Nama upload preset Anda
-const CLOUDINARY_FOLDER = "toddopuli";             // Folder di Cloudinary (opsional)
+const CLOUDINARY_CLOUD = "vsuyvv7v";              // ← Cloud name Anda (2 huruf v)
+const CLOUDINARY_PRESET = "toddopuli_unsigned";    // ← Nama upload preset Unsigned
+// Catatan: TIDAK perlu parameter folder manual, karena preset sudah punya folder default
 
 // ============================================================
-
+// INIT FIREBASE
+// ============================================================
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -169,7 +170,6 @@ function updateStats() {
   set('statRiset', cachedData.riset.length);
   set('statHki', cachedData.hki.length);
   set('statBerita', cachedData.berita.length);
-  // Admin dashboard
   set('dashInovasi', cachedData.inovasi.length);
   set('dashRiset', cachedData.riset.length);
   set('dashPub', cachedData.publikasi.length);
@@ -545,15 +545,24 @@ function handleFilePick(input, key, kind) {
 }
 
 // ============================================================
-// UPLOAD KE CLOUDINARY
+// UPLOAD KE CLOUDINARY (UNSIGNED)
 // ============================================================
 async function uploadFile(file, path, onProgress) {
   return new Promise((resolve, reject) => {
+    // URL endpoint Cloudinary (resource_type: auto = support image + raw/file)
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`;
+
+    console.log("=== CLOUDINARY UPLOAD DEBUG ===");
+    console.log("Cloud Name:", CLOUDINARY_CLOUD);
+    console.log("Preset:", CLOUDINARY_PRESET);
+    console.log("URL:", url);
+    console.log("File:", file.name, "|", file.type, "|", (file.size/1024).toFixed(1), "KB");
+    console.log("===============================");
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_PRESET);
-    if (CLOUDINARY_FOLDER) formData.append('folder', CLOUDINARY_FOLDER);
+    // ⚠️ TIDAK kirim 'folder' — biarkan preset yang atur
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
@@ -566,10 +575,12 @@ async function uploadFile(file, path, onProgress) {
     };
 
     xhr.onload = () => {
-      if (xhr.status === 200) {
+      console.log("Response Status:", xhr.status);
+      console.log("Response Body:", xhr.responseText);
+
+      if (xhr.status === 200 || xhr.status === 201) {
         try {
           const res = JSON.parse(xhr.responseText);
-          // Kembalikan URL aman (secure_url)
           resolve(res.secure_url || res.url);
         } catch (err) {
           reject(new Error('Respons Cloudinary tidak valid'));
@@ -578,7 +589,7 @@ async function uploadFile(file, path, onProgress) {
         let msg = 'Upload gagal (' + xhr.status + ')';
         try {
           const errRes = JSON.parse(xhr.responseText);
-          if (errRes.error?.message) msg += ': ' + errRes.error.message;
+          if (errRes.error?.message) msg = errRes.error.message;
         } catch {}
         reject(new Error(msg));
       }
@@ -622,11 +633,9 @@ async function saveForm() {
     // Upload file baru jika ada
     if (pendingUploadFile) {
       const { file, key } = pendingUploadFile;
-      const ext = file.name.split('.').pop();
-      const path = `${k}/${Date.now()}_${key}.${ext}`;
       $('uploadProgress').style.display = 'block';
       $('uploadFill').style.width = '0%';
-      const url = await uploadFile(file, path, (p) => {
+      const url = await uploadFile(file, null, (p) => {
         $('uploadFill').style.width = p + '%';
         btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Upload ${p}%`;
       });
@@ -649,10 +658,10 @@ async function saveForm() {
     closeForm();
     renderCrud();
     updateStats();
-    alert('Data berhasil disimpan!');
+    alert('✅ Data berhasil disimpan!');
   } catch (e) {
-    console.error(e);
-    alert('Gagal menyimpan: ' + e.message);
+    console.error("Save error:", e);
+    alert('❌ Gagal menyimpan: ' + e.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> Simpan Data';
