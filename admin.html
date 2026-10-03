@@ -14,7 +14,7 @@
 </head>
 <body>
 
-<!-- AUTH SCREEN -->
+<!-- ==================== AUTH SCREEN ==================== -->
 <div id="authScreen" class="auth-screen">
   <div class="auth-card">
     <div class="logo-icon big"><i class="fas fa-shield-halved"></i></div>
@@ -32,7 +32,7 @@
   </div>
 </div>
 
-<!-- ADMIN APP -->
+<!-- ==================== ADMIN APP ==================== -->
 <div id="adminApp" style="display:none;">
   <header class="header">
     <div class="container header-wrap">
@@ -56,7 +56,8 @@
 
   <main class="container admin-main">
     <div class="admin-layout">
-      <!-- SIDEBAR -->
+
+      <!-- ==================== SIDEBAR ==================== -->
       <aside class="admin-sidebar">
         <div class="sidebar-head">
           <h3><i class="fas fa-th-large"></i> Menu Admin</h3>
@@ -93,14 +94,17 @@
         </button>
       </aside>
 
-      <!-- CONTENT -->
+      <!-- ==================== CONTENT ==================== -->
       <section class="admin-content">
-        <!-- DASHBOARD -->
+
+        <!-- ==================== DASHBOARD ==================== -->
         <div id="adm-dashboard" class="adm-page active">
           <div class="page-head">
             <h2><i class="fas fa-chart-line"></i> Dashboard</h2>
             <p>Ringkasan data TODDOPULI</p>
           </div>
+
+          <!-- Stat Cards -->
           <div class="stat-grid">
             <div class="stat-card" style="--c:#1E3A8A"><i class="fas fa-lightbulb"></i><h3 id="dashInovasi">0</h3><p>Inovasi</p></div>
             <div class="stat-card" style="--c:#1D4ED8"><i class="fas fa-flask"></i><h3 id="dashRiset">0</h3><p>Riset</p></div>
@@ -111,25 +115,31 @@
             <div class="stat-card" style="--c:#075985"><i class="fas fa-database"></i><h3 id="dashDb">0</h3><p>Database</p></div>
           </div>
 
+          <!-- Charts -->
           <div class="page-head" style="margin-top:30px;">
-            <h3><i class="fas fa-clock-rotate-left"></i> Aktivitas Terkini</h3>
+            <h3><i class="fas fa-chart-pie"></i> Statistik Visual</h3>
           </div>
           <div class="chart-grid">
-          <div class="chart-card">
-            <h3><i class="fas fa-chart-bar"></i> Inovasi per Tahun</h3>
-            <canvas id="chartTahun"></canvas>
+            <div class="chart-card">
+              <h3><i class="fas fa-chart-bar"></i> Inovasi per Tahun</h3>
+              <canvas id="chartTahun"></canvas>
+            </div>
+            <div class="chart-card">
+              <h3><i class="fas fa-chart-pie"></i> Inovasi per OPD</h3>
+              <canvas id="chartOpd"></canvas>
+            </div>
           </div>
-          <div class="chart-card">
-            <h3><i class="fas fa-chart-pie"></i> Inovasi per OPD</h3>
-            <canvas id="chartOpd"></canvas>
-          </div>
+
+          <!-- Activity -->
+          <div class="page-head" style="margin-top:30px;">
+            <h3><i class="fas fa-clock-rotate-left"></i> Aktivitas Terkini</h3>
           </div>
           <div id="activityLog" class="activity-list">
             <p class="empty">Belum ada aktivitas.</p>
           </div>
         </div>
 
-        <!-- CRUD -->
+        <!-- ==================== CRUD ==================== -->
         <div id="adm-crud" class="adm-page">
           <div class="page-head crud-head">
             <div>
@@ -140,69 +150,92 @@
               <i class="fas fa-plus"></i> Tambah Baru
             </button>
           </div>
-          <div class="toolbar">
-            <i class="fas fa-search toolbar-icon"></i>
-            <input type="text" id="crudSearch" placeholder="Cari data..." oninput="renderCrud()">
+
+          <!-- Toolbar: Search + Export/Import dalam satu baris -->
+          <div class="toolbar toolbar-flex">
+            <div class="toolbar-search">
+              <i class="fas fa-search toolbar-icon"></i>
+              <input type="text" id="crudSearch" placeholder="Cari data..." oninput="renderCrud()">
+            </div>
+            <div class="toolbar-actions">
+              <button class="btn-tool" onclick="exportExcel()" title="Export ke Excel">
+                <i class="fas fa-file-excel"></i> <span>Excel</span>
+              </button>
+              <button class="btn-tool" onclick="exportPDF()" title="Export ke PDF">
+                <i class="fas fa-file-pdf"></i> <span>PDF</span>
+              </button>
+              <button class="btn-tool" onclick="triggerImport()" title="Import dari Excel">
+                <i class="fas fa-file-import"></i> <span>Import</span>
+              </button>
+              <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImport(this)">
+            </div>
           </div>
+
           <div id="crudList" class="crud-list"></div>
-          <div class="toolbar-actions">
-          <button class="btn-tool" onclick="exportExcel()" title="Export ke Excel">
-            <i class="fas fa-file-excel"></i> Excel
-            </button>
-          <button class="btn-tool" onclick="exportPDF()" title="Export ke PDF">
-            <i class="fas fa-file-pdf"></i> PDF
-            </button>
-          <button class="btn-tool" onclick="triggerImport()" title="Import dari Excel">
-            <i class="fas fa-file-import"></i> Import
-            </button>
-          <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImport(this)">
-          </div>
         </div>
 
-        <!-- HALAMAN GALERI -->
-<div id="adm-galeri" class="adm-page">
-  <div class="page-head">
-    <h2><i class="fas fa-images"></i> Galeri Foto</h2>
-    <p>Semua gambar dari Inovasi, Berita, dan Pelatihan</p>
-  </div>
-  <div class="toolbar">
-    <i class="fas fa-search toolbar-icon"></i>
-    <input type="text" id="galeriSearch" placeholder="Cari gambar..." oninput="renderGaleri()">
-    <select id="galeriFilter" onchange="renderGaleri()">
-      <option value="">Semua Kategori</option>
-      <option value="inovasi">Inovasi</option>
-      <option value="berita">Berita</option>
-      <option value="pelatihan">Pelatihan</option>
-    </select>
-  </div>
-  <div id="galeriList" class="galeri-grid"></div>
-</div>
+        <!-- ==================== GALERI ==================== -->
+        <div id="adm-galeri" class="adm-page">
+          <div class="page-head">
+            <h2><i class="fas fa-images"></i> Galeri Foto</h2>
+            <p>Semua gambar dari Inovasi, Berita, dan Pelatihan</p>
+          </div>
+          <div class="toolbar toolbar-flex">
+            <div class="toolbar-search">
+              <i class="fas fa-search toolbar-icon"></i>
+              <input type="text" id="galeriSearch" placeholder="Cari gambar..." oninput="renderGaleri()">
+            </div>
+            <select id="galeriFilter" onchange="renderGaleri()" style="max-width:200px;">
+              <option value="">Semua Kategori</option>
+              <option value="inovasi">Inovasi</option>
+              <option value="berita">Berita</option>
+              <option value="pelatihan">Pelatihan</option>
+            </select>
+          </div>
+          <div id="galeriList" class="galeri-grid"></div>
+        </div>
 
-<!-- HALAMAN KELOLA ADMIN -->
-<div id="adm-users" class="adm-page">
-  <div class="page-head crud-head">
-    <div>
-      <h2><i class="fas fa-users-cog"></i> Kelola Admin</h2>
-      <p>Atur siapa saja yang bisa mengelola TODDOPULI</p>
-    </div>
-    <button class="btn-primary" onclick="openUserForm()">
-      <i class="fas fa-user-plus"></i> Tambah Admin
-    </button>
-  </div>
-  <div class="info-box">
-    <i class="fas fa-shield-halved"></i>
-    <p><b>Super Admin:</b> akses penuh + kelola admin lain<br>
-       <b>Admin:</b> CRUD semua data<br>
-       <b>Editor:</b> hanya tambah & edit (tidak bisa hapus)</p>
-  </div>
-  <div id="usersList" class="crud-list"></div>
-</div>
+        <!-- ==================== KELOLA ADMIN ==================== -->
+        <div id="adm-users" class="adm-page">
+          <div class="page-head crud-head">
+            <div>
+              <h2><i class="fas fa-users-cog"></i> Kelola Admin</h2>
+              <p>Atur siapa saja yang bisa mengelola TODDOPULI</p>
+            </div>
+            <button class="btn-primary" onclick="openUserForm()">
+              <i class="fas fa-user-plus"></i> Tambah Admin
+            </button>
+          </div>
+          <div class="info-box">
+            <i class="fas fa-shield-halved"></i>
+            <p><b>Super Admin:</b> akses penuh + kelola admin lain<br>
+               <b>Admin:</b> CRUD semua data<br>
+               <b>Editor:</b> hanya tambah & edit (tidak bisa hapus)</p>
+          </div>
+          <div id="usersList" class="crud-list"></div>
+        </div>
+
       </section>
     </div>
   </main>
 </div>
 
-<!-- USER MODAL -->
+<!-- ==================== MODAL: FORM DATA ==================== -->
+<div class="modal" id="formModal">
+  <div class="modal-content big">
+    <span class="close" onclick="closeForm()">&times;</span>
+    <h2 id="formTitle">Tambah Data</h2>
+    <div id="formFields"></div>
+    <div class="progress-bar" id="uploadProgress" style="display:none;">
+      <div class="progress-fill" id="uploadFill"></div>
+    </div>
+    <button class="btn-primary full" id="saveBtn" onclick="saveForm()">
+      <i class="fas fa-save"></i> Simpan Data
+    </button>
+  </div>
+</div>
+
+<!-- ==================== MODAL: USER ==================== -->
 <div class="modal" id="userModal">
   <div class="modal-content">
     <span class="close" onclick="closeUserForm()">&times;</span>
@@ -225,26 +258,16 @@
   </div>
 </div>
 
-<!-- TOAST CONTAINER -->
+<!-- ==================== TOAST CONTAINER ==================== -->
 <div id="toastContainer" class="toast-container"></div>
-  
-<!-- FORM MODAL -->
-<div class="modal" id="formModal">
-  <div class="modal-content big">
-    <span class="close" onclick="closeForm()">&times;</span>
-    <h2 id="formTitle">Tambah Data</h2>
-    <div id="formFields"></div>
-    <div class="progress-bar" id="uploadProgress" style="display:none;">
-      <div class="progress-fill" id="uploadFill"></div>
-    </div>
-    <button class="btn-primary full" id="saveBtn" onclick="saveForm()">
-      <i class="fas fa-save"></i> Simpan Data
-    </button>
-  </div>
-</div>
 
+<!-- ==================== SCRIPT ==================== -->
 <script type="module" src="script.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+
+<!-- Debug (opsional): aktifkan hanya kalau perlu cek error
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
+-->
+
 </body>
 </html>
