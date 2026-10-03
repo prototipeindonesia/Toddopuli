@@ -20,12 +20,13 @@ import {
 // ⚠️ GANTI DENGAN firebaseConfig MILIK ANDA (Langkah 1.5)
 // ============================================================
 const firebaseConfig = {
-  apiKey: "ISI_API_KEY_ANDA",
+  apiKey: "AIzaSyDd5aSNwQWtKNdyZvin7hOwlHHdBDyRQQg",
   authDomain: "toddopuli.firebaseapp.com",
   projectId: "toddopuli",
-  storageBucket: "toddopuli.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdef123456"
+  storageBucket: "toddopuli.firebasestorage.app",
+  messagingSenderId: "335127104149",
+  appId: "1:335127104149:web:972c337e7f4db3b7e6e99c",
+  measurementId: "G-840HNFYJ61"
 };
 // ============================================================
 
