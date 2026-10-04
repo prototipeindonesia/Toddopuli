@@ -1654,3 +1654,144 @@ main { padding: 40px 16px 60px; }
     padding: 8px 12px;
   }
 }
+
+/* ============================================================
+   TAMBAHAN v4.4 — Fitur Akses File & Permintaan Akses Data
+============================================================ */
+
+/* ============ TOMBOL MINTA AKSES (Kuning) ============ */
+.btn-akses {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--warning);
+  color: #fff;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: 0.2s;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+.btn-akses:hover {
+  background: var(--accent-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+}
+
+/* ============ TOMBOL UNDUH / DOWNLOAD (Hijau) ============ */
+.btn-unduh {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--success);
+  color: #fff;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: 0.2s;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+}
+.btn-unduh:hover {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+}
+
+/* ============ INFO BOX — VARIAN AKSES FILE ============ */
+.info-box.file {
+  background: #F0FDF4;
+  border-left-color: var(--success);
+}
+.info-box.file i {
+  color: var(--success);
+}
+.info-box.file p {
+  color: #065F46;
+}
+
+/* ============ FILE STATUS BADGE (Publik / Terbatas) ============ */
+.file-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.file-status-badge.publik {
+  background: #DCFCE7;
+  color: #166534;
+}
+.file-status-badge.terbatas {
+  background: #FEF3C7;
+  color: #92400E;
+}
+.file-status-badge i {
+  font-size: 9px;
+}
+
+/* ============ CARD PERMINTAAN AKSES DATA ============ */
+.crud-item .crud-item-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.crud-item-meta-row .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ============ STYLE UNTUK INFO KATAGORI DI DETAIL ============ */
+.detail-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--light);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--gray);
+  flex-wrap: wrap;
+}
+.detail-info-row b {
+  color: var(--primary-dark);
+}
+
+/* ============ RESPONSIVE — Tombol akses di HP ============ */
+@media (max-width: 480px) {
+  .btn-akses,
+  .btn-unduh {
+    width: 100%;
+    justify-content: center;
+    font-size: 12px;
+    padding: 10px 14px;
+  }
+}
+
+/* ============ INFO BOX KHUSUS — Keterangan Akses File di Admin ============ */
+.info-box.file-info {
+  background: #EFF6FF;
+  border-left-color: var(--primary);
+}
+.info-box.file-info i {
+  color: var(--primary);
+}
+.info-box.file-info p {
+  color: var(--primary-dark);
+}
