@@ -449,8 +449,11 @@
       </small>
     </div>
 
-    <label>Password (untuk akun baru)</label>
-    <input type="text" id="u_pass" placeholder="Min. 6 karakter">
+    <!-- Field Password — dibungkus wrapper agar bisa show/hide -->
+    <div id="u_pass_wrapper">
+      <label>Password (untuk akun baru)</label>
+      <input type="text" id="u_pass" placeholder="Min. 6 karakter">
+    </div>
 
     <button class="btn-primary full" onclick="saveUser()">
       <i class="fas fa-save"></i> Simpan
