@@ -61,6 +61,9 @@
       <aside class="admin-sidebar">
         <div class="sidebar-head">
           <h3><i class="fas fa-th-large"></i> Menu Admin</h3>
+          <div id="sidebarUserInfo" style="display:none;margin-top:10px;padding:8px 10px;background:var(--primary-soft);border-radius:8px;font-size:11px;">
+            <!-- Diisi oleh JS -->
+          </div>
         </div>
         <button class="side-btn active" onclick="showAdminPage('dashboard', this)">
           <i class="fas fa-chart-line"></i> Dashboard
@@ -104,7 +107,7 @@
         <div id="adm-dashboard" class="adm-page active">
           <div class="page-head">
             <h2><i class="fas fa-chart-line"></i> Dashboard</h2>
-            <p>Ringkasan data TODDOPULI</p>
+            <p id="dashboardSubtitle">Ringkasan data TODDOPULI</p>
           </div>
 
           <!-- Stat Cards -->
@@ -189,7 +192,7 @@
         <div id="adm-galeri" class="adm-page">
           <div class="page-head">
             <h2><i class="fas fa-images"></i> Galeri Foto</h2>
-            <p>Semua gambar dari Inovasi, Berita, dan Pelatihan</p>
+            <p id="galeriSubtitle">Semua gambar dari Inovasi, Berita, dan Pelatihan</p>
           </div>
           <div class="toolbar toolbar-flex">
             <div class="toolbar-search">
@@ -219,9 +222,12 @@
           </div>
           <div class="info-box">
             <i class="fas fa-shield-halved"></i>
-            <p><b>Super Admin:</b> akses penuh + kelola admin lain<br>
-               <b>Admin:</b> CRUD semua data<br>
-               <b>Editor:</b> hanya tambah & edit (tidak bisa hapus)</p>
+            <div>
+              <p style="margin-bottom:6px;"><b>Super Admin:</b> akses penuh + kelola admin lain</p>
+              <p style="margin-bottom:6px;"><b>Admin:</b> CRUD semua data (semua OPD)</p>
+              <p style="margin-bottom:6px;"><b>Admin OPD:</b> hanya kelola data OPD sendiri — menu terbatas (Dashboard, Inovasi, Riset, Pelatihan, Galeri)</p>
+              <p><b>Editor:</b> hanya tambah & edit (tidak bisa hapus)</p>
+            </div>
           </div>
           <div id="usersList" class="crud-list"></div>
         </div>
@@ -251,18 +257,36 @@
   <div class="modal-content">
     <span class="close" onclick="closeUserForm()">&times;</span>
     <h2 id="userFormTitle"><i class="fas fa-user-plus"></i> Tambah Admin</h2>
+
     <label>Email</label>
     <input type="email" id="u_email" placeholder="nama@toddopuli.go.id" required>
+
     <label>Nama Lengkap</label>
     <input type="text" id="u_nama" placeholder="Nama lengkap">
+
     <label>Role</label>
-    <select id="u_role">
+    <select id="u_role" onchange="toggleUserOpdField()">
       <option value="admin">Admin (CRUD semua data)</option>
+      <option value="admin_opd">Admin OPD (hanya OPD sendiri)</option>
       <option value="editor">Editor (tambah & edit saja)</option>
       <option value="super_admin">Super Admin (akses penuh)</option>
     </select>
+
+    <!-- Field OPD — tampil hanya kalau role = admin_opd -->
+    <div id="u_opd_wrapper" style="display:none;">
+      <label>OPD <span style="color:#DC2626">*</span></label>
+      <select id="u_opd">
+        <option value="">-- Pilih OPD --</option>
+        <!-- Options diisi oleh JS dari collection 'opd' -->
+      </select>
+      <small style="color:#F59E0B;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
+        <i class="fas fa-info-circle"></i> Pastikan OPD sudah ada di menu <b>OPD</b> terlebih dahulu.
+      </small>
+    </div>
+
     <label>Password (untuk akun baru)</label>
     <input type="text" id="u_pass" placeholder="Min. 6 karakter">
+
     <button class="btn-primary full" onclick="saveUser()">
       <i class="fas fa-save"></i> Simpan
     </button>
