@@ -1,10 +1,11 @@
 /* ============================================================
-   TODDOPULI v4.1 - Script Utama
+   TODDOPULI v4.2 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
    + PELATIHAN NEW + MASYARAKAT UMUM + PENDAFTARAN + REQUEST AKSES
    + HKI Card Polished + Error Handling Improved
+   + PELATIHAN VIEWER untuk Admin OPD & Masyarakat
 ============================================================ */
 
 import {
@@ -266,18 +267,23 @@ function isEditorOrAbove() {
 function canApprove() { return isSuperAdmin() || isAdmin(); }
 
 // ============================================================
-// FILTER DATA
+// FILTER DATA PER ROLE
 // ============================================================
 function filterDataForRole(kategori, list) {
+  // PELATIHAN: semua role bisa lihat (dibuat admin/super admin untuk diikuti)
+  if (kategori === 'pelatihan') {
+    return list;
+  }
+
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return list.filter(d => d.opd === currentProfile?.opd);
-    if (['riset', 'pelatihan', 'hki'].includes(kategori)) return list.filter(d => d.createdBy === currentUser?.email);
+    if (['riset', 'hki'].includes(kategori)) return list.filter(d => d.createdBy === currentUser?.email);
     if (kategori === 'hki_edukasi') return list;
     return [];
   }
   if (isMasyarakat()) {
     if (['inovasi', 'riset', 'hki'].includes(kategori)) return list.filter(d => d.createdBy === currentUser?.email);
-    if (kategori === 'pelatihan' || kategori === 'hki_edukasi') return list;
+    if (kategori === 'hki_edukasi') return list;
     return [];
   }
   return list;
@@ -292,19 +298,30 @@ function filterForPublic(kategori, list) {
 // PERMISSION PER ITEM
 // ============================================================
 function canEditItem(kategori, d) {
+  // PELATIHAN: hanya Admin/Super Admin yang bisa edit
+  if (kategori === 'pelatihan') {
+    return isSuperAdmin() || isAdmin();
+  }
+
   if (isSuperAdmin() || isAdmin() || isEditor()) return true;
   if (isAdminOpd() || isMasyarakat()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd || d.createdBy === currentUser?.email;
-    if (['riset', 'pelatihan', 'hki'].includes(kategori)) return d.createdBy === currentUser?.email;
+    if (['riset', 'hki'].includes(kategori)) return d.createdBy === currentUser?.email;
     return false;
   }
   return false;
 }
+
 function canDeleteItem(kategori, d) {
+  // PELATIHAN: hanya Admin/Super Admin yang bisa hapus
+  if (kategori === 'pelatihan') {
+    return isSuperAdmin() || isAdmin();
+  }
+
   if (isSuperAdmin() || isAdmin()) return true;
   if (isAdminOpd() || isMasyarakat()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd || d.createdBy === currentUser?.email;
-    if (['riset', 'pelatihan', 'hki'].includes(kategori)) return d.createdBy === currentUser?.email;
+    if (['riset', 'hki'].includes(kategori)) return d.createdBy === currentUser?.email;
     return false;
   }
   return false;
@@ -539,7 +556,36 @@ function buildPelatihanCard(d) {
   </div>`;
 }
 
-/** Card khusus HKI — dengan status proses & info pemilik */
+/** Card pelatihan khusus untuk panel admin OPD & masyarakat (dengan tombol Ikuti) */
+function buildPelatihanAdminCard(d) {
+  const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+  const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
+  const desc = String(d.deskripsi || '');
+  const descCut = desc.length > 150 ? desc.substring(0, 150) + '...' : desc;
+  const jenis = d.jenis ? `<span class="badge badge-jenis">${esc(d.jenis)}</span>` : '';
+  const pemilik = d.pemilik ? `<span class="badge">${esc(d.pemilik)}</span>` : '';
+  const btnIkuti = d.link_pelatihan
+    ? `<a href="${esc(d.link_pelatihan)}" target="_blank" rel="noopener" class="btn-ikuti" onclick="event.stopPropagation();" style="margin-top:12px;">
+         <i class="fas fa-external-link-alt"></i> Ikuti Pelatihan
+       </a>`
+    : '';
+  return `<div class="crud-item crud-item-pelatihan">
+    ${img}
+    <h4>${esc(d.judul)}</h4>
+    <p>${esc(descCut)}</p>
+    <div class="badge-row" style="margin-top:6px;">
+      ${pemilik}
+      ${jenis}
+    </div>
+    ${btnIkuti}
+    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #E2E8F0;font-size:11px;color:#64748B;display:flex;align-items:center;gap:6px;">
+      <i class="fas fa-info-circle" style="color:#3B82F6;"></i>
+      <span>Diselenggarakan oleh ${esc(d.pemilik || 'Admin TODDOPULI')}</span>
+    </div>
+  </div>`;
+}
+
+/** Card khusus HKI */
 function buildHkiCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
@@ -602,14 +648,11 @@ function renderPublikasi() {
     : emptyMsg('Belum ada publikasi.');
 }
 
-/** Render HKI — sort terbaru, filter status bukan Ditolak */
 function renderHki() {
   if (!$('listHki')) return;
   const q = ($('searchHki')?.value || '').toLowerCase();
   let d = filterForPublic('hki', cachedData.hki);
-  // Sembunyikan HKI yang ditolak dari publik (opsional)
   d = d.filter(x => (x.status_proses || 'Diajukan') !== 'Ditolak');
-  // Sort terbaru di atas
   d = [...d].sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
   if (q) d = d.filter(x =>
     (x.judul||'').toLowerCase().includes(q) ||
@@ -930,18 +973,31 @@ function renderWidgetPelatihan() {
   const container = $('widgetPelatihan'); if (!container) return;
   let list = cachedData.pelatihan || [];
   const items = list.slice(0, 3);
-  if (!items.length) { container.innerHTML = `<div class="widget-empty"><i class="fas fa-chalkboard-teacher"></i>Belum ada pelatihan terbaru.</div>`; return; }
+  if (!items.length) {
+    container.innerHTML = `<div class="widget-empty"><i class="fas fa-chalkboard-teacher"></i>Belum ada pelatihan terbaru.</div>`;
+    return;
+  }
   container.innerHTML = items.map(d => {
     const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
     const imgHtml = imgSrc
       ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-chalkboard-teacher&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
       : `<div class="widget-item-img placeholder"><i class="fas fa-chalkboard-teacher"></i></div>`;
+    const btnIkuti = d.link_pelatihan
+      ? `<a href="${esc(d.link_pelatihan)}" target="_blank" rel="noopener" class="widget-item-btn" onclick="event.stopPropagation();">
+           <i class="fas fa-external-link-alt"></i> Ikuti
+         </a>`
+      : '';
     return `<div class="widget-item" onclick="showDetail('pelatihan','${d.id}')">
-      ${imgHtml}<div class="widget-item-body">
+      ${imgHtml}
+      <div class="widget-item-body">
         <h4>${esc(d.judul)}</h4>
-        <p>${esc(String(d.deskripsi||'').substring(0,100))}</p>
-        <span class="widget-item-date"><i class="fas fa-user"></i> ${esc(d.pemilik || '-')} • ${esc(d.jenis||'')}</span>
-      </div></div>`;
+        <p>${esc(String(d.deskripsi||'').substring(0,80))}</p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          <span class="widget-item-date"><i class="fas fa-user"></i> ${esc(d.pemilik || '-')}</span>
+          ${btnIkuti}
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -1129,6 +1185,8 @@ function applyRoleToUI() {
     ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
 
   updateStatusFilterVisibility();
+  updatePelatihanInfoVisibility();
+  updateCrudToolbarVisibility();
 }
 
 function updateStatusFilterVisibility() {
@@ -1140,6 +1198,35 @@ function updateStatusFilterVisibility() {
   if (filterWrap) filterWrap.style.display = (butuhApproval && isAnyAdmin()) ? 'block' : 'none';
   if (approvalInfo) approvalInfo.style.display = (butuhApproval && (isAdminOpd() || isMasyarakat())) ? 'flex' : 'none';
   if (approvalLegend) approvalLegend.style.display = (butuhApproval && canApprove()) ? 'flex' : 'none';
+}
+
+/** Info Pelatihan — hanya untuk Admin OPD & Masyarakat saat buka menu Pelatihan */
+function updatePelatihanInfoVisibility() {
+  const k = currentAdminPage;
+  const infoPelatihan = $('crudPelatihanInfo');
+  if (!infoPelatihan) return;
+  const show = k === 'pelatihan' && (isAdminOpd() || isMasyarakat());
+  infoPelatihan.style.display = show ? 'flex' : 'none';
+}
+
+/** Sembunyikan tombol Tambah/Export/Import saat Admin OPD/Masyarakat lihat Pelatihan */
+function updateCrudToolbarVisibility() {
+  const k = currentAdminPage;
+
+  const toolbarActions = document.querySelector('#adm-crud .toolbar-actions');
+  const addBtn = document.querySelector('#adm-crud .crud-head .btn-primary');
+
+  const hideForPelatihanViewer = k === 'pelatihan' && (isAdminOpd() || isMasyarakat());
+  const hideForCreatorOnly = creatorOnly(k) && !isAdminOrAbove();
+
+  if (toolbarActions) toolbarActions.style.display = hideForPelatihanViewer ? 'none' : 'flex';
+  if (addBtn) {
+    if (hideForPelatihanViewer || hideForCreatorOnly) {
+      addBtn.style.display = 'none';
+    } else {
+      addBtn.style.display = 'inline-flex';
+    }
+  }
 }
 
 // ============================================================
@@ -1200,6 +1287,8 @@ function showAdminPage(page, btn) {
     $('crudSearch').value = '';
     const sf = $('crudStatusFilter'); if (sf) sf.value = '';
     updateStatusFilterVisibility();
+    updatePelatihanInfoVisibility();
+    updateCrudToolbarVisibility();
     renderCrud();
   }
 }
@@ -1290,7 +1379,23 @@ function renderCrud() {
     list.sort((a,b) => { const o = {pending:0,rejected:1,approved:2}; return (o[getApprovalStatus(a)]??3)-(o[getApprovalStatus(b)]??3); });
   }
 
-  container.innerHTML = list.length ? list.map(d => {
+  // === KHUSUS PELATIHAN untuk Admin OPD & Masyarakat ===
+  if (k === 'pelatihan' && (isAdminOpd() || isMasyarakat())) {
+    if (!list.length) {
+      container.innerHTML = emptyMsg('Belum ada pelatihan dari Admin. Silakan cek kembali nanti.');
+      return;
+    }
+    container.innerHTML = list.map(buildPelatihanAdminCard).join('');
+    return;
+  }
+
+  // === Default card (semua kategori lainnya) ===
+  if (!list.length) {
+    container.innerHTML = emptyMsg((isAdminOpd()||isMasyarakat()) ? `Belum ada data ${KATEGORI[k].nama} untuk Anda.` : 'Belum ada data.');
+    return;
+  }
+
+  container.innerHTML = list.map(d => {
     const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
     const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
     const badge = d.opd || d.jenis || d.kategori || d.peneliti || d.pemilik;
@@ -1321,7 +1426,7 @@ function renderCrud() {
         <button class="btn-del" onclick="hapusData('${d.id}')" ${deletable?'':'disabled'}><i class="fas fa-trash"></i> Hapus</button>
       </div>
     </div>`;
-  }).join('') : emptyMsg((isAdminOpd()||isMasyarakat()) ? `Belum ada data ${KATEGORI[k].nama} untuk Anda.` : 'Belum ada data.');
+  }).join('');
 }
 
 // ============================================================
@@ -2132,7 +2237,8 @@ Object.assign(window, {
   openEdukasiForm, closeEdukasiForm, saveEdukasi, hapusEdukasi, toggleEdukasiFields,
   renderHkiEdukasiAdmin, renderHkiRequests, renderRegistrations,
   waRequest, approveHkiRequest, rejectHkiRequest, waRegistration, approveRegistration, rejectRegistration,
-  renderWidgetBerita, renderWidgetPelatihan, renderHomeWidgets
+  renderWidgetBerita, renderWidgetPelatihan, renderHomeWidgets,
+  updatePelatihanInfoVisibility, updateCrudToolbarVisibility
 });
 
 // ============================================================
