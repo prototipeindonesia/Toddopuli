@@ -1,11 +1,12 @@
 /* ============================================================
-   TODDOPULI v4.2 - Script Utama
+   TODDOPULI v4.3 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
    + PELATIHAN NEW + MASYARAKAT UMUM + PENDAFTARAN + REQUEST AKSES
    + HKI Card Polished + Error Handling Improved
    + PELATIHAN VIEWER untuk Admin OPD & Masyarakat
+   + FIX EDIT ADMIN BUG
 ============================================================ */
 
 import {
@@ -270,10 +271,7 @@ function canApprove() { return isSuperAdmin() || isAdmin(); }
 // FILTER DATA PER ROLE
 // ============================================================
 function filterDataForRole(kategori, list) {
-  // PELATIHAN: semua role bisa lihat (dibuat admin/super admin untuk diikuti)
-  if (kategori === 'pelatihan') {
-    return list;
-  }
+  if (kategori === 'pelatihan') return list;
 
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return list.filter(d => d.opd === currentProfile?.opd);
@@ -298,11 +296,7 @@ function filterForPublic(kategori, list) {
 // PERMISSION PER ITEM
 // ============================================================
 function canEditItem(kategori, d) {
-  // PELATIHAN: hanya Admin/Super Admin yang bisa edit
-  if (kategori === 'pelatihan') {
-    return isSuperAdmin() || isAdmin();
-  }
-
+  if (kategori === 'pelatihan') return isSuperAdmin() || isAdmin();
   if (isSuperAdmin() || isAdmin() || isEditor()) return true;
   if (isAdminOpd() || isMasyarakat()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd || d.createdBy === currentUser?.email;
@@ -313,11 +307,7 @@ function canEditItem(kategori, d) {
 }
 
 function canDeleteItem(kategori, d) {
-  // PELATIHAN: hanya Admin/Super Admin yang bisa hapus
-  if (kategori === 'pelatihan') {
-    return isSuperAdmin() || isAdmin();
-  }
-
+  if (kategori === 'pelatihan') return isSuperAdmin() || isAdmin();
   if (isSuperAdmin() || isAdmin()) return true;
   if (isAdminOpd() || isMasyarakat()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd || d.createdBy === currentUser?.email;
@@ -556,7 +546,7 @@ function buildPelatihanCard(d) {
   </div>`;
 }
 
-/** Card pelatihan khusus untuk panel admin OPD & masyarakat (dengan tombol Ikuti) */
+/** Card pelatihan khusus untuk panel admin OPD & masyarakat */
 function buildPelatihanAdminCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
@@ -823,17 +813,14 @@ function showDetail(k, id) {
     }
   });
 
-  // Buttons
   if (d.laporan) html += `<a href="${esc(normalizeDriveUrl(d.laporan))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-lines"></i> Lihat Laporan</a> `;
   if (d.dokumen) html += `<a href="${esc(normalizeDriveUrl(d.dokumen))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a> `;
   if (d.sertifikat) html += `<a href="${esc(normalizeDriveUrl(d.sertifikat))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a> `;
 
-  // Pelatihan: tombol Ikuti
   if (k === 'pelatihan' && d.link_pelatihan) {
     html += `<a href="${esc(d.link_pelatihan)}" target="_blank" rel="noopener" class="btn-ikuti" style="margin-top:12px;display:inline-block;text-decoration:none;"><i class="fas fa-external-link-alt"></i> Ikuti Pelatihan</a>`;
   }
 
-  // HKI: tombol download / request
   if (k === 'hki' && d.link_file) {
     const isOwner = d.email_pemilik && currentUser?.email === d.email_pemilik;
     if (isOwner) {
@@ -1379,7 +1366,6 @@ function renderCrud() {
     list.sort((a,b) => { const o = {pending:0,rejected:1,approved:2}; return (o[getApprovalStatus(a)]??3)-(o[getApprovalStatus(b)]??3); });
   }
 
-  // === KHUSUS PELATIHAN untuk Admin OPD & Masyarakat ===
   if (k === 'pelatihan' && (isAdminOpd() || isMasyarakat())) {
     if (!list.length) {
       container.innerHTML = emptyMsg('Belum ada pelatihan dari Admin. Silakan cek kembali nanti.');
@@ -1389,7 +1375,6 @@ function renderCrud() {
     return;
   }
 
-  // === Default card (semua kategori lainnya) ===
   if (!list.length) {
     container.innerHTML = emptyMsg((isAdminOpd()||isMasyarakat()) ? `Belum ada data ${KATEGORI[k].nama} untuk Anda.` : 'Belum ada data.');
     return;
@@ -2054,13 +2039,25 @@ function populateOpdDropdown(selected = '') {
   opts.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; if (o === selected) opt.selected = true; sel.appendChild(opt); });
 }
 
+/** ============================================================
+ *  FUNGSI INI YANG DIPERBAIKI — SEBELUMNYA BUG
+ *  ============================================================
+ *  Bug: $('u_pass').parentElement.style.display
+ *       .parentElement merujuk ke .modal-content (bukan wrapper)
+ *       akibatnya seluruh modal tertutup saat edit diklik.
+ *
+ *  Fix: gunakan $('u_pass_wrapper') yang membungkus label + input password
+ *       di admin.html.
+ *  ============================================================ */
 function openUserForm() {
   editingUserId = null;
   $('userFormTitle').innerHTML = '<i class="fas fa-user-plus"></i> Tambah Admin';
-  ['u_email','u_nama','u_pass'].forEach(id => $(id).value = '');
+  ['u_email','u_nama','u_pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
   $('u_role').value = 'admin';
   $('u_email').disabled = false;
-  $('u_pass').parentElement.style.display = 'block';
+  // ✅ FIX: ganti parentElement dengan wrapper
+  const passWrap = $('u_pass_wrapper');
+  if (passWrap) passWrap.style.display = 'block';
   populateOpdDropdown();
   toggleUserOpdField();
   $('userModal').classList.add('show');
@@ -2074,7 +2071,9 @@ function editUser(id) {
   $('u_nama').value = u.nama || '';
   $('u_role').value = u.role || 'admin';
   $('u_email').disabled = true;
-  $('u_pass').parentElement.style.display = 'none';
+  // ✅ FIX: ganti parentElement dengan wrapper
+  const passWrap = $('u_pass_wrapper');
+  if (passWrap) passWrap.style.display = 'none';
   populateOpdDropdown(u.opd || '');
   toggleUserOpdField();
   $('userModal').classList.add('show');
