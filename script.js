@@ -1,12 +1,13 @@
 /* ============================================================
-   TODDOPULI v4.3 - Script Utama
+   TODDOPULI v4.4 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
-   + PELATIHAN NEW + MASYARAKAT UMUM + PENDAFTARAN + REQUEST AKSES
+   + PELATIHAN NEW + MASYARAKAT UMUM + PENDAFTARAN + REQUEST AKSES HKI
    + HKI Card Polished + Error Handling Improved
    + PELATIHAN VIEWER untuk Admin OPD & Masyarakat
    + FIX EDIT ADMIN BUG
+   + REQUEST AKSES DATA (Inovasi, Riset, Publikasi, Database)
 ============================================================ */
 
 import {
@@ -64,6 +65,8 @@ const KATEGORI = {
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
       { key:'manfaat', label:'Manfaat', type:'textarea', required:true },
       { key:'hasil', label:'Hasil', type:'textarea', required:true },
+      { key:'akses_file', label:'Akses File Laporan', type:'select',
+        options:['Publik','Terbatas'], required:true },
       { key:'laporan', label:'Link Laporan Inovasi (Google Drive, opsional)', type:'text' },
       { key:'gambar', label:'Link Gambar Inovasi (Google Drive — JPG/PNG/JPEG)', type:'text' }
     ]
@@ -75,6 +78,8 @@ const KATEGORI = {
       { key:'peneliti', label:'Peneliti', type:'text', required:true },
       { key:'tahun', label:'Tahun', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'akses_file', label:'Akses File Dokumen', type:'select',
+        options:['Publik','Terbatas'], required:true },
       { key:'dokumen', label:'Link Dokumen (Google Drive)', type:'text' }
     ]
   },
@@ -86,6 +91,8 @@ const KATEGORI = {
         options:['Laporan','Jurnal','Profil','Buku','Artikel'] },
       { key:'tahun', label:'Tahun', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'akses_file', label:'Akses File Publikasi', type:'select',
+        options:['Publik','Terbatas'], required:true },
       { key:'dokumen', label:'Link Publikasi (Google Drive)', type:'text' }
     ]
   },
@@ -147,6 +154,8 @@ const KATEGORI = {
       { key:'judul', label:'Nama Dataset', type:'text', required:true },
       { key:'kategori', label:'Kategori', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
+      { key:'akses_file', label:'Akses File Dataset', type:'select',
+        options:['Publik','Terbatas'], required:true },
       { key:'dokumen', label:'Link Dataset (Google Drive)', type:'text' }
     ]
   },
@@ -180,7 +189,8 @@ let currentAdminPage = 'dashboard';
 let cachedData = {
   inovasi:[], riset:[], publikasi:[], hki:[],
   berita:[], pelatihan:[], database:[], opd:[],
-  hki_edukasi:[], hki_requests:[], registrations:[]
+  hki_edukasi:[], hki_requests:[], registrations:[],
+  access_requests: []
 };
 let cachedUsers = [];
 let editingId = null;
@@ -364,7 +374,7 @@ function waLink(phone, text) {
 // LOAD DATA
 // ============================================================
 async function loadAllData() {
-  const keys = Object.keys(KATEGORI).concat(['hki_edukasi', 'hki_requests', 'registrations']);
+  const keys = Object.keys(KATEGORI).concat(['hki_edukasi', 'hki_requests', 'registrations', 'access_requests']);
   await Promise.all(keys.map(async (k) => {
     try {
       const snap = await getDocs(collection(db, k));
@@ -415,7 +425,7 @@ function startRealtimeListeners() {
     unsubscribers.push(unsub);
   });
 
-  ['hki_edukasi', 'hki_requests', 'registrations'].forEach(k => {
+  ['hki_edukasi', 'hki_requests', 'registrations', 'access_requests'].forEach(k => {
     const unsub = onSnapshot(collection(db, k), (snap) => {
       cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (!isAdminPage()) {
@@ -423,6 +433,7 @@ function startRealtimeListeners() {
       } else {
         if (k === 'hki_edukasi' && currentAdminPage === 'hki_edukasi') renderHkiEdukasiAdmin();
         if (k === 'hki_requests' && currentAdminPage === 'hki_requests') renderHkiRequests();
+        if (k === 'access_requests' && currentAdminPage === 'access_requests') renderAccessRequests();
         if (k === 'registrations' && currentAdminPage === 'registrations') renderRegistrations();
       }
     }, err => console.warn('Listener err:', k, err));
@@ -546,7 +557,6 @@ function buildPelatihanCard(d) {
   </div>`;
 }
 
-/** Card pelatihan khusus untuk panel admin OPD & masyarakat */
 function buildPelatihanAdminCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
@@ -575,7 +585,6 @@ function buildPelatihanAdminCard(d) {
   </div>`;
 }
 
-/** Card khusus HKI */
 function buildHkiCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
@@ -806,15 +815,29 @@ function showDetail(k, id) {
     if (badges) html += `<div class="badge-row" style="margin-bottom:14px;">${badges}</div>`;
   }
   cfg.fields.forEach(f => {
-    if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik'].includes(f.key)) return;
+    if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik','akses_file'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
       const val = f.type === 'date' ? formatTanggal(d[f.key]) : esc(d[f.key]);
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
 
-  if (d.laporan) html += `<a href="${esc(normalizeDriveUrl(d.laporan))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-lines"></i> Lihat Laporan</a> `;
-  if (d.dokumen) html += `<a href="${esc(normalizeDriveUrl(d.dokumen))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a> `;
+  // File buttons — handle akses Publik vs Terbatas
+  const fileFields = ['laporan','dokumen'];
+  fileFields.forEach(key => {
+    if (!d[key]) return;
+    const fieldLabel = key === 'laporan' ? 'Laporan' : 'Dokumen';
+    const aksesTerbatas = (d.akses_file || 'Publik') === 'Terbatas';
+    const canDirectAccess = !aksesTerbatas || isAdminOrAbove();
+
+    if (canDirectAccess) {
+      const btnColor = aksesTerbatas ? 'background:#059669;' : '';
+      html += `<a href="${esc(normalizeDriveUrl(d[key]))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;${btnColor}"><i class="fas fa-${aksesTerbatas ? 'download' : 'file-pdf'}"></i> ${aksesTerbatas ? 'Download' : 'Lihat'} ${fieldLabel}</a> `;
+    } else {
+      html += `<button class="btn-primary" style="margin-top:12px;background:#F59E0B;color:#fff;" onclick="event.stopPropagation();openAccessRequest('${k}','${d.id}','${key}')"><i class="fas fa-lock"></i> Minta Akses ${fieldLabel}</button> `;
+    }
+  });
+
   if (d.sertifikat) html += `<a href="${esc(normalizeDriveUrl(d.sertifikat))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a> `;
 
   if (k === 'pelatihan' && d.link_pelatihan) {
@@ -823,8 +846,8 @@ function showDetail(k, id) {
 
   if (k === 'hki' && d.link_file) {
     const isOwner = d.email_pemilik && currentUser?.email === d.email_pemilik;
-    if (isOwner) {
-      html += `<a href="${esc(normalizeDriveUrl(d.link_file))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;background:#059669;"><i class="fas fa-download"></i> Download Karya Anda</a>`;
+    if (isOwner || isAdminOrAbove()) {
+      html += `<a href="${esc(normalizeDriveUrl(d.link_file))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;background:#059669;"><i class="fas fa-download"></i> Download Karya</a>`;
     } else {
       html += `<button class="btn-primary" style="margin-top:12px;background:#F59E0B;color:#fff;" onclick="event.stopPropagation();openHkiRequest('${d.id}')"><i class="fas fa-lock"></i> Minta Akses Download</button>`;
     }
@@ -884,6 +907,77 @@ async function submitHkiRequest(hkiId) {
       const text = `Halo Admin TODDOPULI,\n\nSaya ${nama} ingin meminta akses download HKI:\n\n• HKI: ${d?.judul}\n• Tujuan: ${tujuan}\n• No. WA saya: ${wa}\n\nTerima kasih.`;
       window.open(waLink(ADMIN_WA, text), '_blank');
     }, 800);
+  } catch (e) {
+    console.error(e);
+    toast('error', 'Gagal', e.message);
+  }
+}
+
+// ============================================================
+// REQUEST AKSES DATA (Inovasi, Riset, Publikasi, Database)
+// ============================================================
+function openAccessRequest(kategori, docId, fileKey) {
+  const d = cachedData[kategori]?.find(x => x.id === docId);
+  if (!d) return;
+  const fieldLabel = fileKey === 'laporan' ? 'Laporan' : 'Dokumen';
+  const katLabel = KATEGORI[kategori].nama;
+
+  const html = `
+    <h2><i class="fas fa-lock"></i> Minta Akses ${fieldLabel}</h2>
+    <p style="font-size:13px;color:#64748B;margin-bottom:14px;">
+      Isi data di bawah ini. Admin akan mengirimkan akses melalui WhatsApp Anda setelah diverifikasi.
+    </p>
+    <p style="margin-bottom:10px;padding:10px;background:#DBEAFE;border-radius:8px;font-size:12px;">
+      <b>${esc(katLabel)}:</b> ${esc(d.judul)}
+    </p>
+    <label>Nama Lengkap <span style="color:#DC2626">*</span></label>
+    <input type="text" id="acc_nama" placeholder="Nama lengkap">
+    <label>Nomor WhatsApp <span style="color:#DC2626">*</span></label>
+    <input type="tel" id="acc_wa" placeholder="08xx xxxx xxxx">
+    <label>Instansi / Institusi</label>
+    <input type="text" id="acc_instansi" placeholder="Contoh: Universitas Andi Djemma">
+    <label>Tujuan Penggunaan <span style="color:#DC2626">*</span></label>
+    <textarea id="acc_tujuan" placeholder="Contoh: referensi penelitian, dll..."></textarea>
+    <button class="btn-primary full" onclick="submitAccessRequest('${kategori}','${docId}','${fileKey}')"><i class="fas fa-paper-plane"></i> Kirim Permintaan</button>
+  `;
+  $('detailContent').innerHTML = html;
+  $('detailModal').classList.add('show');
+}
+
+async function submitAccessRequest(kategori, docId, fileKey) {
+  const d = cachedData[kategori]?.find(x => x.id === docId);
+  const nama = $('acc_nama')?.value.trim();
+  const wa = $('acc_wa')?.value.trim();
+  const instansi = $('acc_instansi')?.value.trim() || '';
+  const tujuan = $('acc_tujuan')?.value.trim();
+
+  if (!nama || !wa || !tujuan) { alert('Semua field bertanda * wajib diisi!'); return; }
+  if (!/^0\d{8,13}$/.test(wa.replace(/[\s-]/g,''))) { alert('Format nomor WA tidak valid (contoh: 08123456789)'); return; }
+
+  try {
+    await addDoc(collection(db, 'access_requests'), {
+      kategori,
+      file_key: fileKey,
+      doc_id: docId,
+      doc_judul: d?.judul || '',
+      doc_pemilik: d?.opd || d?.peneliti || d?.pemilik || '-',
+      nama_pemohon: nama,
+      no_wa: wa,
+      instansi,
+      tujuan,
+      status: 'pending',
+      createdAt: serverTimestamp()
+    });
+
+    closeDetail();
+    toast('success', 'Permintaan Terkirim', 'Admin akan menghubungi Anda via WhatsApp.');
+
+    setTimeout(() => {
+      const katLabel = KATEGORI[kategori].nama;
+      const text = `Halo Admin TODDOPULI,\n\nSaya ${nama} (${instansi || 'Umum'}) ingin meminta akses file:\n\n• Kategori: ${katLabel}\n• Judul: ${d?.judul}\n• Tujuan: ${tujuan}\n• No. WA saya: ${wa}\n\nMohon dibantu verifikasi. Terima kasih.`;
+      window.open(waLink(ADMIN_WA, text), '_blank');
+    }, 800);
+
   } catch (e) {
     console.error(e);
     toast('error', 'Gagal', e.message);
@@ -1187,7 +1281,6 @@ function updateStatusFilterVisibility() {
   if (approvalLegend) approvalLegend.style.display = (butuhApproval && canApprove()) ? 'flex' : 'none';
 }
 
-/** Info Pelatihan — hanya untuk Admin OPD & Masyarakat saat buka menu Pelatihan */
 function updatePelatihanInfoVisibility() {
   const k = currentAdminPage;
   const infoPelatihan = $('crudPelatihanInfo');
@@ -1196,7 +1289,6 @@ function updatePelatihanInfoVisibility() {
   infoPelatihan.style.display = show ? 'flex' : 'none';
 }
 
-/** Sembunyikan tombol Tambah/Export/Import saat Admin OPD/Masyarakat lihat Pelatihan */
 function updateCrudToolbarVisibility() {
   const k = currentAdminPage;
 
@@ -1227,6 +1319,7 @@ const PAGE_TITLES = {
   hki: ['HKI', 'Kelola Hak Kekayaan Intelektual'],
   hki_edukasi: ['Edukasi HKI', 'Kelola artikel & video edukasi HKI'],
   hki_requests: ['Permintaan Akses HKI', 'Permintaan download dari pengunjung'],
+  access_requests: ['Permintaan Akses Data', 'Permintaan download Inovasi/Riset/Publikasi/Database'],
   registrations: ['Pendaftaran Masyarakat', 'Pendaftaran akun baru dari masyarakat umum'],
   berita: ['Berita', 'Kelola berita & informasi'],
   pelatihan: ['Pelatihan', 'Kelola program pelatihan'],
@@ -1263,6 +1356,9 @@ function showAdminPage(page, btn) {
   } else if (page === 'hki_requests') {
     const el = $('adm-hki-requests'); if (el) el.classList.add('active');
     renderHkiRequests();
+  } else if (page === 'access_requests') {
+    const el = $('adm-access-requests'); if (el) el.classList.add('active');
+    renderAccessRequests();
   } else if (page === 'registrations') {
     const el = $('adm-registrations'); if (el) el.classList.add('active');
     renderRegistrations();
@@ -1353,7 +1449,7 @@ function renderDashboardCharts() {
 // ============================================================
 function renderCrud() {
   const k = currentAdminPage;
-  if (['dashboard','galeri','users','hki_edukasi','hki_requests','registrations'].includes(k)) return;
+  if (['dashboard','galeri','users','hki_edukasi','hki_requests','registrations','access_requests'].includes(k)) return;
   const container = $('crudList'); if (!container) return;
   const q = ($('crudSearch')?.value || '').toLowerCase();
   const statusFilter = $('crudStatusFilter')?.value || '';
@@ -1935,6 +2031,77 @@ async function rejectHkiRequest(id) {
 }
 
 // ============================================================
+// ACCESS REQUESTS (Inovasi, Riset, Publikasi, Database)
+// ============================================================
+function renderAccessRequests() {
+  const c = $('accessRequestsList'); if (!c) return;
+  const d = (cachedData.access_requests || []).sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+
+  if (!d.length) {
+    c.innerHTML = emptyMsg('Belum ada permintaan akses data.');
+    return;
+  }
+
+  c.innerHTML = d.map(x => {
+    const statusBadge = x.status === 'pending' ? '<span class="approval-badge approval-pending">Menunggu</span>'
+      : x.status === 'approved' ? '<span class="approval-badge approval-approved">Disetujui</span>'
+      : '<span class="approval-badge approval-rejected">Ditolak</span>';
+    const katLabel = KATEGORI[x.kategori]?.nama || x.kategori;
+    const fieldLabel = x.file_key === 'laporan' ? 'Laporan' : 'Dokumen';
+    const canAct = isAdminOrAbove();
+    return `<div class="crud-item">
+      <h4><i class="fas ${KATEGORI[x.kategori]?.icon || 'fa-file'}"></i> ${esc(x.doc_judul)}</h4>
+      <p style="margin-top:6px;">
+        <b>Kategori:</b> ${esc(katLabel)} (${esc(fieldLabel)})<br>
+        <b>Pemohon:</b> ${esc(x.nama_pemohon)}<br>
+        <b>Instansi:</b> ${esc(x.instansi || '-')}<br>
+        <b>WA:</b> ${esc(x.no_wa)}<br>
+        <b>Tujuan:</b> ${esc(x.tujuan)}
+      </p>
+      <div style="margin-top:6px;">${statusBadge}</div>
+      <div class="crud-actions">
+        <button class="btn-tool" onclick="waAccessRequest('${x.id}')"><i class="fab fa-whatsapp"></i> Chat WA</button>
+        ${x.status === 'pending' && canAct ? `
+          <button class="btn-approve" onclick="approveAccessRequest('${x.id}')"><i class="fas fa-check"></i> ACC</button>
+          <button class="btn-reject" onclick="rejectAccessRequest('${x.id}')"><i class="fas fa-times"></i> Tolak</button>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function waAccessRequest(id) {
+  const r = cachedData.access_requests.find(x => x.id === id); if (!r) return;
+  const text = `Halo ${r.nama_pemohon},\n\nPermintaan akses file "${r.doc_judul}" (${KATEGORI[r.kategori]?.nama}) Anda telah kami terima.`;
+  window.open(waLink(r.no_wa, text), '_blank');
+}
+
+async function approveAccessRequest(id) {
+  if (!isAdminOrAbove()) return;
+  try {
+    await updateDoc(doc(db, 'access_requests', id), {
+      status: 'approved',
+      processedAt: serverTimestamp(),
+      processedBy: currentUser?.email
+    });
+    toast('success', 'Disetujui', 'Status diperbarui. Kirim link via WA.');
+  } catch (e) { toast('error', 'Gagal', e.message); }
+}
+
+async function rejectAccessRequest(id) {
+  if (!isAdminOrAbove()) return;
+  if (!confirm('Tolak permintaan akses ini?')) return;
+  try {
+    await updateDoc(doc(db, 'access_requests', id), {
+      status: 'rejected',
+      processedAt: serverTimestamp(),
+      processedBy: currentUser?.email
+    });
+    toast('info', 'Ditolak', '');
+  } catch (e) { toast('error', 'Gagal', e.message); }
+}
+
+// ============================================================
 // REGISTRATIONS (ADMIN)
 // ============================================================
 function renderRegistrations() {
@@ -2039,23 +2206,12 @@ function populateOpdDropdown(selected = '') {
   opts.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; if (o === selected) opt.selected = true; sel.appendChild(opt); });
 }
 
-/** ============================================================
- *  FUNGSI INI YANG DIPERBAIKI — SEBELUMNYA BUG
- *  ============================================================
- *  Bug: $('u_pass').parentElement.style.display
- *       .parentElement merujuk ke .modal-content (bukan wrapper)
- *       akibatnya seluruh modal tertutup saat edit diklik.
- *
- *  Fix: gunakan $('u_pass_wrapper') yang membungkus label + input password
- *       di admin.html.
- *  ============================================================ */
 function openUserForm() {
   editingUserId = null;
   $('userFormTitle').innerHTML = '<i class="fas fa-user-plus"></i> Tambah Admin';
   ['u_email','u_nama','u_pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
   $('u_role').value = 'admin';
   $('u_email').disabled = false;
-  // ✅ FIX: ganti parentElement dengan wrapper
   const passWrap = $('u_pass_wrapper');
   if (passWrap) passWrap.style.display = 'block';
   populateOpdDropdown();
@@ -2071,7 +2227,6 @@ function editUser(id) {
   $('u_nama').value = u.nama || '';
   $('u_role').value = u.role || 'admin';
   $('u_email').disabled = true;
-  // ✅ FIX: ganti parentElement dengan wrapper
   const passWrap = $('u_pass_wrapper');
   if (passWrap) passWrap.style.display = 'none';
   populateOpdDropdown(u.opd || '');
@@ -2237,7 +2392,9 @@ Object.assign(window, {
   renderHkiEdukasiAdmin, renderHkiRequests, renderRegistrations,
   waRequest, approveHkiRequest, rejectHkiRequest, waRegistration, approveRegistration, rejectRegistration,
   renderWidgetBerita, renderWidgetPelatihan, renderHomeWidgets,
-  updatePelatihanInfoVisibility, updateCrudToolbarVisibility
+  updatePelatihanInfoVisibility, updateCrudToolbarVisibility,
+  openAccessRequest, submitAccessRequest, renderAccessRequests,
+  waAccessRequest, approveAccessRequest, rejectAccessRequest
 });
 
 // ============================================================
