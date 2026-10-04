@@ -239,6 +239,71 @@ main { padding: 40px 16px 60px; }
   box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
 }
 
+
+/* ==================== TOOLBAR INOVASI (3 FILTER) ==================== */
+.toolbar-inovasi {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--white);
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+}
+.toolbar-inovasi .toolbar-search {
+  flex: 1 1 240px;
+  min-width: 200px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.toolbar-inovasi .toolbar-search input {
+  width: 100%;
+  padding: 11px 16px 11px 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  background: var(--light);
+  transition: 0.2s;
+}
+.toolbar-inovasi .toolbar-search input:focus {
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+}
+.toolbar-inovasi .toolbar-search .toolbar-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--gray);
+  font-size: 13px;
+  pointer-events: none;
+}
+.toolbar-inovasi select {
+  flex: 0 1 auto;
+  min-width: 140px;
+  padding: 11px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--light);
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: 0.2s;
+  color: var(--dark);
+}
+.toolbar-inovasi select:focus {
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+}
+
+
 /* ==================== TOOLBAR FLEX (ADMIN: search + actions) ==================== */
 .toolbar-flex {
   display: flex;
@@ -427,6 +492,12 @@ main { padding: 40px 16px 60px; }
 .modal label {
   display: block; font-size: 12px; color: var(--dark);
   margin-bottom: 6px; font-weight: 600;
+}
+/* Input URL khusus (link Google Drive) */
+.modal input[type="url"] {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.2px;
 }
 .login-hint {
   background: var(--primary-soft); padding: 12px;
@@ -697,22 +768,33 @@ main { padding: 40px 16px 60px; }
 .btn-del:hover:not(:disabled) { background: var(--danger); color: #fff; }
 
 
-/* ==================== CHARTS (DASHBOARD) ==================== */
+/* ==================== CHARTS (DASHBOARD) — 4 CHART GRID ==================== */
 .chart-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2 kolom x 2 baris = 4 chart */
+  gap: 16px;
   margin-bottom: 30px;
 }
 .chart-card {
   background: var(--white); padding: 18px;
   border-radius: 14px; border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
+  position: relative;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
 }
 .chart-card h3 {
   font-size: 14px; color: var(--primary);
   margin-bottom: 14px; font-weight: 700;
   display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
 }
-.chart-card canvas { max-height: 240px; }
+.chart-card canvas {
+  flex: 1;
+  max-height: 240px;
+  min-height: 200px;
+}
 
 
 /* ==================== TOOLBAR ACTIONS (EXPORT/IMPORT) ==================== */
@@ -848,7 +930,9 @@ main { padding: 40px 16px 60px; }
   .admin-sidebar { position: static; max-height: none; }
   .footer-grid { grid-template-columns: 1fr; gap: 20px; }
 
+  /* Chart grid: 1 kolom di tablet */
   .chart-grid { grid-template-columns: 1fr; }
+  .chart-card { min-height: 280px; }
   .galeri-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -867,6 +951,18 @@ main { padding: 40px 16px 60px; }
   }
   .toolbar-actions { margin-left: 0; width: 100%; }
   .galeri-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Toolbar Inovasi: filter jadi 2 kolom */
+  .toolbar-inovasi .toolbar-search {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  .toolbar-inovasi select {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+    font-size: 12px;
+    padding: 10px 12px;
+  }
 }
 
 /* Mobile kecil (max-width: 480px) */
@@ -899,4 +995,18 @@ main { padding: 40px 16px 60px; }
 
   .toast-container { top: 10px; right: 10px; left: 10px; }
   .toast { min-width: auto; max-width: none; }
+
+  /* Toolbar Inovasi: filter jadi 1 kolom di HP kecil */
+  .toolbar-inovasi {
+    padding: 10px;
+  }
+  .toolbar-inovasi select {
+    flex: 1 1 100%;
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  /* Chart di HP: tinggi lebih kecil */
+  .chart-card { min-height: 250px; padding: 14px; }
+  .chart-card canvas { max-height: 200px; min-height: 180px; }
 }
