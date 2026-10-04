@@ -1,10 +1,10 @@
 /* ============================================================
-   TODDOPULI v3.5 - Script Utama
+   TODDOPULI v3.6 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter Jenis & Bentuk Inovasi + ROLE ADMIN OPD
-   + Sinkron dengan admin.html v3.5
+   + APPROVAL/ACC Admin OPD
 ============================================================ */
 
 import {
@@ -136,6 +136,20 @@ const KATEGORI = {
 };
 
 // ============================================================
+// KATEGORI YANG BUTUH APPROVAL
+// ============================================================
+const APPROVAL_KATEGORI = ['inovasi', 'riset', 'hki'];
+
+function needsApproval(kategori) {
+  return APPROVAL_KATEGORI.includes(kategori);
+}
+
+/** Ambil status approval — default 'approved' untuk backward compat */
+function getApprovalStatus(d) {
+  return d?.approval_status || 'approved';
+}
+
+// ============================================================
 // HELPER: URL FIELDS
 // ============================================================
 const URL_KEYS = ['gambar','dokumen','sertifikat','laporan'];
@@ -210,8 +224,8 @@ let isFirstSnapshot = true;
 // ============================================================
 // MENU YANG DIIZINKAN UNTUK ADMIN OPD
 // ============================================================
-const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'pelatihan', 'galeri'];
-const ADMIN_OPD_STAT_CARDS = ['dashInovasi', 'dashRiset', 'dashPelatihan'];
+const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'galeri'];
+const ADMIN_OPD_STAT_CARDS = ['dashInovasi', 'dashRiset', 'dashHki', 'dashPelatihan'];
 
 // ============================================================
 // UTIL
@@ -228,6 +242,17 @@ function formatTanggal(t) {
     const d = new Date(t);
     return d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
   } catch { return t; }
+}
+
+function formatDateTime(t) {
+  if (!t) return '-';
+  try {
+    const d = t.toDate ? t.toDate() : new Date(t);
+    return d.toLocaleString('id-ID', {
+      day:'2-digit', month:'short', year:'numeric',
+      hour:'2-digit', minute:'2-digit'
+    });
+  } catch { return '-'; }
 }
 
 // ============================================================
@@ -275,6 +300,11 @@ function isEditorOrAbove() {
   return ['super_admin', 'admin', 'admin_opd', 'editor'].includes(role());
 }
 
+/** Siapa yang bisa approve/reject? */
+function canApprove() {
+  return isSuperAdmin() || isAdmin();
+}
+
 // ============================================================
 // DATA FILTER UNTUK ADMIN OPD
 // ============================================================
@@ -283,10 +313,17 @@ function filterDataForRole(kategori, list) {
   if (kategori === 'inovasi') {
     return list.filter(d => d.opd === currentProfile?.opd);
   }
-  if (kategori === 'riset' || kategori === 'pelatihan') {
+  if (kategori === 'riset' || kategori === 'pelatihan' || kategori === 'hki') {
     return list.filter(d => d.createdBy === currentUser?.email);
   }
   return [];
+}
+
+/** Filter untuk halaman PUBLIK — hanya data approved */
+function filterForPublic(kategori, list) {
+  // Hanya kategori yang butuh approval
+  if (!needsApproval(kategori)) return list;
+  return list.filter(d => getApprovalStatus(d) === 'approved');
 }
 
 // ============================================================
@@ -296,7 +333,7 @@ function canEditItem(kategori, d) {
   if (isSuperAdmin() || isAdmin() || isEditor()) return true;
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd;
-    if (kategori === 'riset' || kategori === 'pelatihan') {
+    if (['riset', 'pelatihan', 'hki'].includes(kategori)) {
       return d.createdBy === currentUser?.email;
     }
     return false;
@@ -308,7 +345,7 @@ function canDeleteItem(kategori, d) {
   if (isSuperAdmin() || isAdmin()) return true;
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd;
-    if (kategori === 'riset' || kategori === 'pelatihan') {
+    if (['riset', 'pelatihan', 'hki'].includes(kategori)) {
       return d.createdBy === currentUser?.email;
     }
     return false;
@@ -317,10 +354,9 @@ function canDeleteItem(kategori, d) {
 }
 
 // ============================================================
-// TERAPKAN ROLE KE UI (SIDEBAR & STAT CARDS & SIDEBAR INFO)
+// TERAPKAN ROLE KE UI
 // ============================================================
 function applyRoleToUI() {
-  // === 1. Update Sidebar User Info ===
   const sidebarInfo = $('sidebarUserInfo');
   if (sidebarInfo) {
     if (currentProfile?.nama || role()) {
@@ -345,7 +381,6 @@ function applyRoleToUI() {
     }
   }
 
-  // === 2. Sembunyikan menu sidebar yang tidak diizinkan ===
   document.querySelectorAll('.side-btn').forEach(btn => {
     const onclickAttr = btn.getAttribute('onclick') || '';
     const match = onclickAttr.match(/showAdminPage\('([^']+)'/);
@@ -353,21 +388,13 @@ function applyRoleToUI() {
     if (!page) return;
 
     let show = true;
-
-    if (isAdminOpd()) {
-      show = ADMIN_OPD_MENUS.includes(page);
-    } else if (isEditor()) {
-      if (page === 'users') show = false;
-    } else if (isAdmin()) {
-      if (page === 'users') show = false;
-    }
-
+    if (isAdminOpd()) show = ADMIN_OPD_MENUS.includes(page);
+    else if (isEditor() || isAdmin()) { if (page === 'users') show = false; }
     if (page === 'users' && !isSuperAdmin()) show = false;
 
     btn.style.display = show ? 'flex' : 'none';
   });
 
-  // === 3. Sembunyikan stat card yang tidak diizinkan untuk admin_opd ===
   document.querySelectorAll('.stat-card').forEach(card => {
     const h3 = card.querySelector('h3');
     const id = h3?.id || '';
@@ -378,24 +405,30 @@ function applyRoleToUI() {
     }
   });
 
-  // === 4. Update subtitle dashboard & galeri untuk admin OPD ===
   const dashSub = $('dashboardSubtitle');
   if (dashSub) {
-    if (isAdminOpd()) {
-      dashSub.textContent = `Ringkasan data TODDOPULI — ${currentProfile?.opd || 'OPD Anda'}`;
-    } else {
-      dashSub.textContent = 'Ringkasan data TODDOPULI';
-    }
+    dashSub.textContent = isAdminOpd()
+      ? `Ringkasan data TODDOPULI — ${currentProfile?.opd || 'OPD Anda'}`
+      : 'Ringkasan data TODDOPULI';
   }
 
   const galeriSub = $('galeriSubtitle');
   if (galeriSub) {
-    if (isAdminOpd()) {
-      galeriSub.textContent = `Gambar dari data ${currentProfile?.opd || 'OPD Anda'}`;
-    } else {
-      galeriSub.textContent = 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
-    }
+    galeriSub.textContent = isAdminOpd()
+      ? `Gambar dari data ${currentProfile?.opd || 'OPD Anda'}`
+      : 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
   }
+
+  // Tampilkan filter status hanya untuk kategori butuh approval & role admin
+  updateStatusFilterVisibility();
+}
+
+function updateStatusFilterVisibility() {
+  const filterWrap = $('crudStatusFilterWrap');
+  if (!filterWrap) return;
+  const k = currentAdminPage;
+  const show = needsApproval(k) && isAnyAdmin();
+  filterWrap.style.display = show ? 'block' : 'none';
 }
 
 // ============================================================
@@ -486,25 +519,29 @@ function startRealtimeListeners() {
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
 
-  set('statInovasi', cachedData.inovasi.length);
-  set('statRiset', cachedData.riset.length);
-  set('statHki', cachedData.hki.length);
+  // Publik — hanya approved
+  set('statInovasi', filterForPublic('inovasi', cachedData.inovasi).length);
+  set('statRiset', filterForPublic('riset', cachedData.riset).length);
+  set('statHki', filterForPublic('hki', cachedData.hki).length);
   set('statBerita', cachedData.berita.length);
 
+  // Dashboard — filter role
   let inovasiCount = cachedData.inovasi.length;
   let risetCount = cachedData.riset.length;
+  let hkiCount = cachedData.hki.length;
   let pelatihanCount = cachedData.pelatihan.length;
 
   if (isAdminOpd()) {
     inovasiCount = filterDataForRole('inovasi', cachedData.inovasi).length;
     risetCount = filterDataForRole('riset', cachedData.riset).length;
+    hkiCount = filterDataForRole('hki', cachedData.hki).length;
     pelatihanCount = filterDataForRole('pelatihan', cachedData.pelatihan).length;
   }
 
   set('dashInovasi', inovasiCount);
   set('dashRiset', risetCount);
   set('dashPub', cachedData.publikasi.length);
-  set('dashHki', cachedData.hki.length);
+  set('dashHki', hkiCount);
   set('dashBerita', cachedData.berita.length);
   set('dashPelatihan', pelatihanCount);
   set('dashDb', cachedData.database.length);
@@ -512,6 +549,27 @@ function updateStats() {
 
 function emptyMsg(text = 'Belum ada data.') {
   return `<div class="loading"><i class="fas fa-inbox" style="font-size:36px;opacity:.4;display:block;margin-bottom:10px;"></i>${text}</div>`;
+}
+
+// ============================================================
+// BADGE STATUS APPROVAL
+// ============================================================
+function approvalBadge(d) {
+  const status = getApprovalStatus(d);
+  if (status === 'pending') {
+    return `<span class="approval-badge approval-pending" title="Menunggu persetujuan Admin">
+      <i class="fas fa-clock"></i> Menunggu ACC
+    </span>`;
+  }
+  if (status === 'rejected') {
+    const reason = d.rejectReason ? ` — Alasan: ${esc(d.rejectReason)}` : '';
+    return `<span class="approval-badge approval-rejected" title="Ditolak${reason}">
+      <i class="fas fa-circle-xmark"></i> Ditolak
+    </span>`;
+  }
+  return `<span class="approval-badge approval-approved" title="Disetujui">
+    <i class="fas fa-circle-check"></i> Disetujui
+  </span>`;
 }
 
 // ============================================================
@@ -531,9 +589,6 @@ function buildCard(d, k, extraLabel = '') {
   </div>`;
 }
 
-// ============================================================
-// CARD BUILDER KHUSUS INOVASI
-// ============================================================
 function buildInovasiCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="${esc(d.judul)}" loading="lazy" onerror="this.style.display='none'">` : '';
@@ -557,7 +612,7 @@ function buildInovasiCard(d) {
 }
 
 // ============================================================
-// RENDER PUBLIK
+// RENDER PUBLIK (hanya approved)
 // ============================================================
 function renderInovasi() {
   if (!$('listInovasi')) return;
@@ -566,7 +621,8 @@ function renderInovasi() {
   const jenis = $('filterJenisInovasi')?.value || '';
   const bentuk = $('filterBentukInovasi')?.value || '';
 
-  let d = cachedData.inovasi;
+  let d = filterForPublic('inovasi', cachedData.inovasi);
+
   if (q) d = d.filter(x =>
     (x.judul||'').toLowerCase().includes(q) ||
     (x.opd||'').toLowerCase().includes(q) ||
@@ -585,7 +641,7 @@ function renderInovasi() {
 function renderRiset() {
   if (!$('listRiset')) return;
   const q = ($('searchRiset')?.value || '').toLowerCase();
-  let d = cachedData.riset;
+  let d = filterForPublic('riset', cachedData.riset);
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
   $('listRiset').innerHTML = d.length
     ? d.map(x => buildCard(x, 'riset', `${x.peneliti} • ${x.tahun}`)).join('')
@@ -605,7 +661,7 @@ function renderPublikasi() {
 function renderHki() {
   if (!$('listHki')) return;
   const q = ($('searchHki')?.value || '').toLowerCase();
-  let d = cachedData.hki;
+  let d = filterForPublic('hki', cachedData.hki);
   if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
   $('listHki').innerHTML = d.length
     ? d.map(x => buildCard(x, 'hki', `${x.jenis} • ${x.tahun}`)).join('')
@@ -641,7 +697,7 @@ function renderDatabase() {
 }
 
 // ============================================================
-// GALERI
+// GALERI (publik juga filter approved)
 // ============================================================
 function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
@@ -650,7 +706,11 @@ function getGaleriItems(filterKategori = '', query = '') {
     let list = cachedData[k];
     if (isAdminOpd()) {
       list = filterDataForRole(k, list);
+    } else if (!isAdminPage()) {
+      // Publik — filter approved
+      list = filterForPublic(k, list);
     }
+    // Untuk admin/superadmin: lihat semua
     list.forEach(d => {
       if (d.gambar) items.push({ ...d, _kategori: k });
     });
@@ -697,7 +757,7 @@ function renderGaleri() {
 }
 
 // ============================================================
-// NAVIGASI
+// NAVIGASI PUBLIK
 // ============================================================
 function showPage(page, e) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -739,6 +799,11 @@ function showDetail(k, id) {
     html += `<img class="preview-img" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">`;
   }
 
+  // Badge approval di detail (hanya untuk admin/superadmin, atau admin OPD lihat status mereka)
+  if (needsApproval(k) && isAnyAdmin()) {
+    html += `<div style="margin-bottom:14px;">${approvalBadge(d)}</div>`;
+  }
+
   if (k === 'inovasi') {
     let badges = '';
     if (d.opd) badges += `<span class="badge">${esc(d.opd)}</span> `;
@@ -755,6 +820,23 @@ function showDetail(k, id) {
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
+
+  // Info approval
+  if (needsApproval(k) && isAnyAdmin()) {
+    if (d.approvedBy) {
+      html += `<p style="margin-top:12px;padding:10px;background:#DCFCE7;border-radius:8px;font-size:12px;color:#166534;">
+        <i class="fas fa-circle-check"></i> Disetujui oleh <b>${esc(d.approvedBy)}</b><br>
+        <small>${formatDateTime(d.approvedAt)}</small>
+      </p>`;
+    }
+    if (d.rejectedBy) {
+      html += `<p style="margin-top:12px;padding:10px;background:#FEE2E2;border-radius:8px;font-size:12px;color:#991B1B;">
+        <i class="fas fa-circle-xmark"></i> Ditolak oleh <b>${esc(d.rejectedBy)}</b><br>
+        <small>${formatDateTime(d.rejectedAt)}</small>
+        ${d.rejectReason ? `<br><b>Alasan:</b> ${esc(d.rejectReason)}` : ''}
+      </p>`;
+    }
+  }
 
   if (d.laporan) {
     html += `<a href="${esc(normalizeDriveUrl(d.laporan))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-lines"></i> Lihat Laporan Inovasi</a> `;
@@ -848,16 +930,13 @@ onAuthStateChanged(auth, async (user) => {
       $('authScreen').style.display = 'none';
       $('adminApp').style.display = 'block';
 
-      // Tampilkan nama + role + OPD di header
       let label = `${currentProfile.nama || user.email} (${role() || 'viewer'})`;
       if (isAdminOpd() && currentProfile.opd) {
         label = `${currentProfile.nama || user.email} (Admin OPD: ${currentProfile.opd})`;
       }
       $('userEmail').textContent = label;
 
-      // Terapkan role ke UI
       applyRoleToUI();
-
       initAdmin();
     } else {
       $('authScreen').style.display = 'flex';
@@ -898,9 +977,8 @@ async function initAdmin() {
   updateStats();
   renderActivity();
   startRealtimeListeners();
-
-  // Re-apply role setelah data OPD ke-load (biar dropdown OPD keisi)
   applyRoleToUI();
+  injectStatusFilterToToolbar();
 
   let startPage = 'dashboard';
   if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(startPage)) {
@@ -924,7 +1002,6 @@ const PAGE_TITLES = {
 };
 
 function showAdminPage(page, btn) {
-  // Cek izin akses halaman
   if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(page)) {
     toast('error', 'Akses Ditolak', 'Anda tidak punya akses ke menu ini.');
     return;
@@ -943,7 +1020,6 @@ function showAdminPage(page, btn) {
   if (page === 'dashboard') {
     $('adm-dashboard').classList.add('active');
     updateStats();
-    // Set subtitle dinamis
     const sub = $('dashboardSubtitle');
     if (sub) {
       sub.textContent = isAdminOpd()
@@ -953,7 +1029,6 @@ function showAdminPage(page, btn) {
     requestAnimationFrame(() => renderDashboardCharts());
   } else if (page === 'galeri') {
     $('adm-galeri').classList.add('active');
-    // Set subtitle dinamis
     const sub = $('galeriSubtitle');
     if (sub) {
       sub.textContent = isAdminOpd()
@@ -974,25 +1049,49 @@ function showAdminPage(page, btn) {
     $('crudTitle').innerHTML = `<i class="fas ${KATEGORI[page].icon}"></i> ${t}`;
     $('crudSubtitle').textContent = s;
     $('crudSearch').value = '';
+    // Reset status filter
+    const sf = $('crudStatusFilter');
+    if (sf) sf.value = '';
+    updateStatusFilterVisibility();
     renderCrud();
   }
+}
+
+// ============================================================
+// INJECT FILTER STATUS KE TOOLBAR (sekali saja)
+// ============================================================
+function injectStatusFilterToToolbar() {
+  if ($('crudStatusFilterWrap')) return;
+
+  const toolbarActions = document.querySelector('#adm-crud .toolbar-actions');
+  if (!toolbarActions) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'crudStatusFilterWrap';
+  wrap.style.cssText = 'display:none;margin-left:auto;';
+  wrap.innerHTML = `
+    <select id="crudStatusFilter" onchange="renderCrud()" style="padding:11px 14px;border:1px solid var(--border);border-radius:10px;font-size:13px;background:var(--light);outline:none;font-family:inherit;">
+      <option value="">Semua Status</option>
+      <option value="pending">⏳ Menunggu ACC</option>
+      <option value="approved">✓ Disetujui</option>
+      <option value="rejected">✗ Ditolak</option>
+    </select>
+  `;
+  // Insert sebelum toolbar-actions
+  toolbarActions.parentNode.insertBefore(wrap, toolbarActions);
 }
 
 // ============================================================
 // DASHBOARD CHARTS
 // ============================================================
 function renderDashboardCharts() {
-  if (typeof Chart === 'undefined') {
-    console.warn('Chart.js belum siap');
-    return;
-  }
+  if (typeof Chart === 'undefined') return;
 
   let inovasiData = cachedData.inovasi;
   if (isAdminOpd()) {
     inovasiData = filterDataForRole('inovasi', inovasiData);
   }
 
-  // Chart 1: Inovasi per Tahun
   const tahunMap = {};
   inovasiData.forEach(x => {
     if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun] || 0) + 1;
@@ -1015,15 +1114,13 @@ function renderDashboardCharts() {
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
       }
     });
   }
 
-  // Chart 2: Inovasi per OPD
   const opdMap = {};
   inovasiData.forEach(x => {
     if (x.opd) opdMap[x.opd] = (opdMap[x.opd] || 0) + 1;
@@ -1041,21 +1138,16 @@ function renderDashboardCharts() {
         labels: opdLabels.length ? opdLabels : ['Belum ada data'],
         datasets: [{
           data: opdValues.length ? opdValues : [1],
-          backgroundColor: colors,
-          borderWidth: 2, borderColor: '#fff'
+          backgroundColor: colors, borderWidth: 2, borderColor: '#fff'
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
-        }
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }
       }
     });
   }
 
-  // Chart 3: Jenis Inovasi
   const jenisMap = {};
   inovasiData.forEach(x => {
     if (x.jenis_inovasi) jenisMap[x.jenis_inovasi] = (jenisMap[x.jenis_inovasi] || 0) + 1;
@@ -1073,21 +1165,16 @@ function renderDashboardCharts() {
         labels: jenisLabels.length ? jenisLabels : ['Belum ada data'],
         datasets: [{
           data: jenisValues.length ? jenisValues : [1],
-          backgroundColor: jenisColors,
-          borderWidth: 2, borderColor: '#fff'
+          backgroundColor: jenisColors, borderWidth: 2, borderColor: '#fff'
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
-        }
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }
       }
     });
   }
 
-  // Chart 4: Bentuk Inovasi
   const bentukMap = {};
   inovasiData.forEach(x => {
     if (x.bentuk_inovasi) bentukMap[x.bentuk_inovasi] = (bentukMap[x.bentuk_inovasi] || 0) + 1;
@@ -1105,16 +1192,12 @@ function renderDashboardCharts() {
         labels: bentukLabels.length ? bentukLabels : ['Belum ada data'],
         datasets: [{
           data: bentukValues.length ? bentukValues : [1],
-          backgroundColor: bentukColors,
-          borderWidth: 2, borderColor: '#fff'
+          backgroundColor: bentukColors, borderWidth: 2, borderColor: '#fff'
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
-        }
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }
       }
     });
   }
@@ -1131,11 +1214,27 @@ function renderCrud() {
   if (!container) return;
 
   const q = ($('crudSearch')?.value || '').toLowerCase();
+  const statusFilter = $('crudStatusFilter')?.value || '';
 
   let list = cachedData[k] || [];
   list = filterDataForRole(k, list);
 
+  // Filter status (kalau kategori butuh approval)
+  if (needsApproval(k) && statusFilter) {
+    list = list.filter(d => getApprovalStatus(d) === statusFilter);
+  }
+
   if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
+
+  // Sort: pending dulu untuk admin/superadmin
+  if (canApprove() && needsApproval(k)) {
+    list.sort((a, b) => {
+      const order = { pending: 0, rejected: 1, approved: 2 };
+      const sa = getApprovalStatus(a);
+      const sb = getApprovalStatus(b);
+      return (order[sa] ?? 3) - (order[sb] ?? 3);
+    });
+  }
 
   container.innerHTML = list.length
     ? list.map(d => {
@@ -1148,10 +1247,34 @@ function renderCrud() {
 
       const editable = canEditItem(k, d);
       const deletable = canDeleteItem(k, d);
+      const approvalStatus = getApprovalStatus(d);
+      const showApproval = needsApproval(k) && isAnyAdmin();
+      const showApprovalButtons = canApprove() && needsApproval(k) && approvalStatus === 'pending';
 
       const ownerInfo = (isAdminOpd() && d.createdBy)
         ? `<div class="meta" style="font-size:10px;color:#94A3B8;margin-top:4px;">
              <i class="fas fa-user"></i> ${esc(d.createdBy)}
+           </div>`
+        : '';
+
+      const rejectInfo = (approvalStatus === 'rejected' && d.rejectReason)
+        ? `<div class="meta" style="font-size:10px;color:#DC2626;margin-top:4px;">
+             <i class="fas fa-circle-exclamation"></i> ${esc(d.rejectReason)}
+           </div>`
+        : '';
+
+      const approvalRow = showApproval
+        ? `<div style="margin-top:8px;">${approvalBadge(d)}</div>`
+        : '';
+
+      const approvalBtns = showApprovalButtons
+        ? `<div style="display:flex;gap:6px;margin-top:10px;">
+             <button onclick="event.stopPropagation();approveItem('${d.id}')" class="btn-approve">
+               <i class="fas fa-check"></i> Setujui
+             </button>
+             <button onclick="event.stopPropagation();rejectItem('${d.id}')" class="btn-reject">
+               <i class="fas fa-times"></i> Tolak
+             </button>
            </div>`
         : '';
 
@@ -1162,6 +1285,9 @@ function renderCrud() {
         ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
         ${date ? `<div class="meta" style="font-size:11px;color:#94A3B8;margin-top:6px;"><i class="fas fa-calendar"></i> ${esc(date)}</div>` : ''}
         ${ownerInfo}
+        ${rejectInfo}
+        ${approvalRow}
+        ${approvalBtns}
         <div class="crud-actions">
           <button class="btn-edit" onclick="openForm('${d.id}')" ${editable ? '' : 'disabled title="Bukan data Anda"'}>
             <i class="fas fa-pen"></i> Edit
@@ -1177,6 +1303,73 @@ function renderCrud() {
         ? `Belum ada data ${KATEGORI[k].nama} untuk ${currentProfile?.opd || 'OPD Anda'}.`
         : 'Belum ada data.'
     );
+}
+
+// ============================================================
+// APPROVE / REJECT
+// ============================================================
+async function approveItem(id) {
+  const k = currentAdminPage;
+  if (!canApprove()) {
+    return toast('error', 'Akses Ditolak', 'Hanya Admin/Super Admin yang bisa approve.');
+  }
+  if (!needsApproval(k)) return;
+
+  const item = cachedData[k]?.find(x => x.id === id);
+  if (!item) return;
+
+  if (!confirm(`Setujui "${item.judul}"?\n\nData akan tampil di halaman utama setelah disetujui.`)) return;
+
+  try {
+    await updateDoc(doc(db, k, id), {
+      approval_status: 'approved',
+      approvedBy: currentUser?.email,
+      approvedAt: serverTimestamp(),
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectReason: null,
+      updatedAt: serverTimestamp()
+    });
+    saveActivity('approve', k, item.judul);
+    toast('success', 'Disetujui', `"${item.judul}" sekarang tampil di halaman utama.`);
+  } catch (e) {
+    console.error(e);
+    toast('error', 'Gagal Approve', e.message);
+  }
+}
+
+async function rejectItem(id) {
+  const k = currentAdminPage;
+  if (!canApprove()) {
+    return toast('error', 'Akses Ditolak', 'Hanya Admin/Super Admin yang bisa menolak.');
+  }
+  if (!needsApproval(k)) return;
+
+  const item = cachedData[k]?.find(x => x.id === id);
+  if (!item) return;
+
+  const reason = prompt(
+    `Tolak "${item.judul}"?\n\nAlasan penolakan (opsional):`,
+    ''
+  );
+  if (reason === null) return; // user cancel
+
+  try {
+    await updateDoc(doc(db, k, id), {
+      approval_status: 'rejected',
+      rejectedBy: currentUser?.email,
+      rejectedAt: serverTimestamp(),
+      rejectReason: reason || 'Tidak disebutkan',
+      approvedBy: null,
+      approvedAt: null,
+      updatedAt: serverTimestamp()
+    });
+    saveActivity('reject', k, item.judul);
+    toast('info', 'Ditolak', `"${item.judul}" telah ditolak.`);
+  } catch (e) {
+    console.error(e);
+    toast('error', 'Gagal Menolak', e.message);
+  }
 }
 
 // ============================================================
@@ -1209,6 +1402,14 @@ function openForm(id = null) {
   const d = id ? cachedData[k].find(x => x.id === id) : {};
   let html = '';
 
+  // Info approval untuk Admin OPD
+  if (isAdminOpd() && needsApproval(k) && !id) {
+    html += `<div class="info-box warning" style="margin-bottom:14px;">
+      <i class="fas fa-clock"></i>
+      <p>Data yang Anda input akan berstatus <b>"Menunggu ACC"</b> terlebih dahulu. Admin/Super Admin akan menyetujui sebelum tampil di halaman utama.</p>
+    </div>`;
+  }
+
   cfg.fields.forEach(f => {
     let val = d?.[f.key] ?? '';
     const req = f.required ? 'required' : '';
@@ -1226,7 +1427,6 @@ function openForm(id = null) {
       html += `</select>`;
 
     } else if (f.type === 'opd_select') {
-      // KHUSUS ADMIN OPD: OPD otomatis dari profil & terkunci
       if (isAdminOpd()) {
         val = currentProfile?.opd || '';
         html += `<input type="text" id="f_${f.key}" value="${esc(val)}" readonly class="opd-locked">`;
@@ -1375,7 +1575,7 @@ async function uploadFile(file, path, onProgress) {
 }
 
 // ============================================================
-// SIMPAN FORM
+// SIMPAN FORM (dengan Approval Logic)
 // ============================================================
 async function saveForm() {
   const k = editingKategori;
@@ -1411,10 +1611,27 @@ async function saveForm() {
     data.opd = currentProfile?.opd || data.opd;
   }
 
-  if (isAdminOpd() && (k === 'riset' || k === 'pelatihan')) {
-    if (!editingId) {
-      data.createdBy = currentUser?.email;
+  // ================= APPROVAL LOGIC =================
+  if (needsApproval(k)) {
+    if (isAdminOpd()) {
+      // Admin OPD → reset ke pending (perlu re-approval)
+      data.approval_status = 'pending';
+      data.approvedBy = null;
+      data.approvedAt = null;
+      data.rejectedBy = null;
+      data.rejectedAt = null;
+      data.rejectReason = null;
+    } else if (canApprove() && !editingId) {
+      // Admin/Super Admin buat baru → auto approved
+      data.approval_status = 'approved';
+      data.approvedBy = currentUser?.email;
+      data.approvedAt = serverTimestamp();
     }
+    // Untuk edit oleh admin/superadmin: status tetap apa adanya
+  }
+
+  if (isAdminOpd() && !editingId) {
+    data.createdBy = currentUser?.email;
   }
 
   try {
@@ -1452,8 +1669,15 @@ async function saveForm() {
     }
 
     saveActivity(editingId ? 'edit' : 'tambah', k, data.judul);
+
+    // Pesan sukses sesuai role
+    let successMsg = 'Data berhasil disimpan.';
+    if (isAdminOpd() && needsApproval(k)) {
+      successMsg = 'Data berhasil diajukan! Menunggu persetujuan Admin/Super Admin.';
+    }
+
     closeForm();
-    toast('success', 'Berhasil!', 'Data berhasil disimpan.');
+    toast('success', 'Berhasil!', successMsg);
   } catch (e) {
     console.error(e);
     toast('error', 'Gagal Menyimpan', e.message);
@@ -1487,23 +1711,25 @@ async function hapusData(id) {
 }
 
 // ============================================================
-// EXPORT EXCEL
+// EXPORT / IMPORT
 // ============================================================
 function exportExcel() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
   let data = cachedData[k] || [];
   data = filterDataForRole(k, data);
-  if (!data.length) {
-    return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
-  }
+  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
 
   const cfg = KATEGORI[k];
   const rows = data.map(d => {
     const row = {};
-    cfg.fields.forEach(f => {
-      row[f.label] = d[f.key] ?? '';
-    });
+    cfg.fields.forEach(f => { row[f.label] = d[f.key] ?? ''; });
+    if (needsApproval(k)) {
+      const status = getApprovalStatus(d);
+      row['Status Approval'] = status === 'approved' ? 'Disetujui'
+        : status === 'pending' ? 'Menunggu'
+        : status === 'rejected' ? 'Ditolak' : '-';
+    }
     return row;
   });
 
@@ -1514,17 +1740,12 @@ function exportExcel() {
   toast('success', 'Export Berhasil', `Data ${cfg.nama} telah diunduh.`);
 }
 
-// ============================================================
-// EXPORT PDF
-// ============================================================
 function exportPDF() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
   let data = cachedData[k] || [];
   data = filterDataForRole(k, data);
-  if (!data.length) {
-    return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
-  }
+  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
 
   const cfg = KATEGORI[k];
   const { jsPDF } = window.jspdf;
@@ -1540,9 +1761,7 @@ function exportPDF() {
   doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
 
   const textFields = cfg.fields.filter(f =>
-    f.type !== 'image' &&
-    f.type !== 'file' &&
-    !isUrlField(f.key)
+    f.type !== 'image' && f.type !== 'file' && !isUrlField(f.key)
   ).slice(0, 6);
 
   const headers = [textFields.map(f => f.label)];
@@ -1551,9 +1770,7 @@ function exportPDF() {
   );
 
   doc.autoTable({
-    head: headers,
-    body: rows,
-    startY: 33,
+    head: headers, body: rows, startY: 33,
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [245, 248, 255] }
@@ -1563,16 +1780,10 @@ function exportPDF() {
   toast('success', 'Export Berhasil', `Data ${cfg.nama} telah diunduh.`);
 }
 
-// ============================================================
-// IMPORT EXCEL
-// ============================================================
 function triggerImport() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
-  if (!isEditorOrAbove()) {
-    toast('error', 'Akses Ditolak', 'Anda tidak punya izin.');
-    return;
-  }
+  if (!isEditorOrAbove()) return toast('error', 'Akses Ditolak', 'Anda tidak punya izin.');
   $('importFile').click();
 }
 
@@ -1588,11 +1799,7 @@ async function handleImport(input) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-    if (!rows.length) {
-      toast('error', 'File Kosong', 'Tidak ada data di file Excel.');
-      return;
-    }
-
+    if (!rows.length) return toast('error', 'File Kosong', 'Tidak ada data di file Excel.');
     if (!confirm(`Akan mengimpor ${rows.length} baris ke kategori ${cfg.nama}. Lanjutkan?`)) return;
 
     const labelToKey = {};
@@ -1622,6 +1829,17 @@ async function handleImport(input) {
 
       if (isAdminOpd() && k === 'inovasi') {
         docData.opd = currentProfile?.opd || docData.opd;
+      }
+
+      // Approval untuk import
+      if (needsApproval(k)) {
+        if (isAdminOpd()) {
+          docData.approval_status = 'pending';
+        } else if (canApprove()) {
+          docData.approval_status = 'approved';
+          docData.approvedBy = currentUser?.email;
+          docData.approvedAt = serverTimestamp();
+        }
       }
 
       try {
@@ -1684,9 +1902,6 @@ function renderUsers() {
     : emptyMsg('Belum ada admin terdaftar.');
 }
 
-// ============================================================
-// USER FORM - OPD FIELD (sudah ada di HTML)
-// ============================================================
 function toggleUserOpdField() {
   const wrapper = $('u_opd_wrapper');
   if (!wrapper) return;
@@ -1694,24 +1909,18 @@ function toggleUserOpdField() {
   wrapper.style.display = r === 'admin_opd' ? 'block' : 'none';
 }
 
-/** Populate dropdown OPD dari cache */
 function populateOpdDropdown(selectedValue = '') {
   const sel = $('u_opd');
   if (!sel) return;
-
-  // Reset dulu (kecuali option pertama)
   sel.innerHTML = '<option value="">-- Pilih OPD --</option>';
-
   const opdOptions = (cachedData.opd || [])
     .map(o => o.judul || o.nama)
     .filter(Boolean)
     .sort();
-
   if (opdOptions.length === 0) {
     sel.innerHTML = '<option value="">-- Belum ada OPD. Tambahkan dulu di menu OPD --</option>';
     return;
   }
-
   opdOptions.forEach(o => {
     const opt = document.createElement('option');
     opt.value = o;
@@ -1730,12 +1939,8 @@ function openUserForm() {
   $('u_pass').value = '';
   $('u_email').disabled = false;
   $('u_pass').parentElement.style.display = 'block';
-
-  // Populate dropdown OPD
   populateOpdDropdown();
-  // Sembunyikan field OPD (karena default role = admin)
   toggleUserOpdField();
-
   $('userModal').classList.add('show');
 }
 
@@ -1749,12 +1954,8 @@ function editUser(id) {
   $('u_role').value = u.role || 'admin';
   $('u_email').disabled = true;
   $('u_pass').parentElement.style.display = 'none';
-
-  // Populate dropdown OPD dengan nilai yang tersimpan
   populateOpdDropdown(u.opd || '');
-  // Tampilkan field OPD jika role = admin_opd
   toggleUserOpdField();
-
   $('userModal').classList.add('show');
 }
 
@@ -1766,11 +1967,8 @@ function closeUserForm() {
 async function createUserSecondary(email, password) {
   const SECONDARY_NAME = 'toddopuli-secondary';
   let secondaryApp;
-  try {
-    secondaryApp = initializeApp(firebaseConfig, SECONDARY_NAME);
-  } catch (e) {
-    console.warn('Secondary app sudah ada, lanjut...');
-  }
+  try { secondaryApp = initializeApp(firebaseConfig, SECONDARY_NAME); }
+  catch (e) { console.warn('Secondary app sudah ada'); }
   const secondaryAuth = getAuth(secondaryApp);
   try {
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
@@ -1785,40 +1983,27 @@ async function createUserSecondary(email, password) {
 }
 
 async function saveUser() {
-  if (!isSuperAdmin()) {
-    return toast('error', 'Akses Ditolak', 'Hanya Super Admin.');
-  }
-
+  if (!isSuperAdmin()) return toast('error', 'Akses Ditolak', 'Hanya Super Admin.');
   const email = $('u_email').value.trim();
   const nama = $('u_nama').value.trim();
   const r = $('u_role').value;
   const pass = $('u_pass').value.trim();
   const opd = $('u_opd')?.value.trim() || '';
-
   if (!email) return toast('error', 'Gagal', 'Email wajib diisi.');
-
-  if (r === 'admin_opd' && !opd) {
-    return toast('error', 'Gagal', 'Pilih OPD untuk Admin OPD.');
-  }
+  if (r === 'admin_opd' && !opd) return toast('error', 'Gagal', 'Pilih OPD untuk Admin OPD.');
 
   const userData = { nama, role: r };
   if (r === 'admin_opd') userData.opd = opd;
 
   try {
     if (editingUserId) {
-      await updateDoc(doc(db, 'users', editingUserId), {
-        ...userData,
-        updatedAt: serverTimestamp()
-      });
+      await updateDoc(doc(db, 'users', editingUserId), { ...userData, updatedAt: serverTimestamp() });
       toast('success', 'Berhasil', 'Data admin diperbarui.');
     } else {
-      if (!pass || pass.length < 6) {
-        return toast('error', 'Gagal', 'Password minimal 6 karakter.');
-      }
+      if (!pass || pass.length < 6) return toast('error', 'Gagal', 'Password minimal 6 karakter.');
       const uid = await createUserSecondary(email, pass);
       await setDoc(doc(db, 'users', uid), {
-        email,
-        ...userData,
+        email, ...userData,
         createdAt: serverTimestamp(),
         createdBy: currentUser?.email
       });
@@ -1828,23 +2013,17 @@ async function saveUser() {
   } catch (e) {
     console.error(e);
     let msg = e.message;
-    if (e.code === 'auth/email-already-in-use') {
-      msg = 'Email sudah terdaftar di Firebase Authentication.';
-    } else if (e.code === 'auth/invalid-email') {
-      msg = 'Format email tidak valid.';
-    } else if (e.code === 'auth/weak-password') {
-      msg = 'Password terlalu lemah (minimal 6 karakter).';
-    }
+    if (e.code === 'auth/email-already-in-use') msg = 'Email sudah terdaftar.';
+    else if (e.code === 'auth/invalid-email') msg = 'Format email tidak valid.';
+    else if (e.code === 'auth/weak-password') msg = 'Password terlalu lemah.';
     toast('error', 'Gagal', msg);
   }
 }
 
 async function hapusUser(id) {
   if (!isSuperAdmin()) return;
-  if (id === currentUser?.uid) {
-    return toast('error', 'Tidak Bisa', 'Tidak bisa hapus akun sendiri.');
-  }
-  if (!confirm('Yakin hapus admin ini dari daftar?\n\nCatatan: Akun Firebase Authentication harus dihapus manual dari Console Firebase.')) return;
+  if (id === currentUser?.uid) return toast('error', 'Tidak Bisa', 'Tidak bisa hapus akun sendiri.');
+  if (!confirm('Yakin hapus admin ini dari daftar?')) return;
   try {
     await deleteDoc(doc(db, 'users', id));
     toast('success', 'Berhasil', 'Admin dihapus dari daftar.');
@@ -1875,11 +2054,12 @@ function renderActivity() {
     return;
   }
   el.innerHTML = log.map(a => {
-    const iconMap = { tambah:'fa-plus', edit:'fa-pen', hapus:'fa-trash', import:'fa-file-import' };
-    const colorMap = { tambah:'#059669', edit:'#F59E0B', hapus:'#DC2626', import:'#2563EB' };
+    const iconMap = { tambah:'fa-plus', edit:'fa-pen', hapus:'fa-trash', import:'fa-file-import',
+                      approve:'fa-circle-check', reject:'fa-circle-xmark' };
+    const colorMap = { tambah:'#059669', edit:'#F59E0B', hapus:'#DC2626', import:'#2563EB',
+                       approve:'#059669', reject:'#DC2626' };
     const t = new Date(a.time).toLocaleString('id-ID', {
-      day:'2-digit', month:'short',
-      hour:'2-digit', minute:'2-digit'
+      day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'
     });
     return `<div class="activity-item">
       <i class="fas ${iconMap[a.action] || 'fa-circle'}" style="background:${(colorMap[a.action] || '#64748B')}20;color:${colorMap[a.action] || '#64748B'};"></i>
@@ -1896,15 +2076,14 @@ function renderActivity() {
 // ============================================================
 function globalSearch() {
   const q = $('globalSearch')?.value.trim();
-  if (!q) {
-    toast('error', 'Kata Kunci Kosong', 'Silakan isi kata kunci pencarian.');
-    return;
-  }
+  if (!q) return toast('error', 'Kata Kunci Kosong', 'Silakan isi kata kunci pencarian.');
   const qLower = q.toLowerCase();
   const results = [];
   Object.entries(cachedData).forEach(([k, list]) => {
     if (k === 'opd') return;
-    list.forEach(d => {
+    // Untuk publik, hanya approved
+    let items = isAdminPage() ? list : filterForPublic(k, list);
+    items.forEach(d => {
       if ((d.judul || '').toLowerCase().includes(qLower) ||
           (d.deskripsi || '').toLowerCase().includes(qLower)) {
         results.push({ k, id: d.id, judul: d.judul, kategori: KATEGORI[k].nama });
@@ -1937,21 +2116,13 @@ function globalSearch() {
 // EVENT LISTENERS
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  $('globalSearch')?.addEventListener('keypress', e => {
-    if (e.key === 'Enter') globalSearch();
-  });
-  $('loginPass')?.addEventListener('keypress', e => {
-    if (e.key === 'Enter') doLogin();
-  });
-  $('authPass')?.addEventListener('keypress', e => {
-    if (e.key === 'Enter') authLogin();
-  });
+  $('globalSearch')?.addEventListener('keypress', e => { if (e.key === 'Enter') globalSearch(); });
+  $('loginPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+  $('authPass')?.addEventListener('keypress', e => { if (e.key === 'Enter') authLogin(); });
   $('pubGaleriSearch')?.addEventListener('input', renderPubGaleri);
 
   document.querySelectorAll('.modal').forEach(m => {
-    m.addEventListener('click', e => {
-      if (e.target === m) m.classList.remove('show');
-    });
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
   });
 
   document.addEventListener('keydown', e => {
@@ -1973,7 +2144,8 @@ Object.assign(window, {
   renderInovasi, renderRiset, renderPublikasi, renderHki,
   renderBerita, renderPelatihan, renderDatabase, renderCrud,
   normalizeDriveUrl, normalizeDriveImageUrl,
-  toggleUserOpdField  // ← ditambahkan karena dipanggil via onchange di HTML
+  toggleUserOpdField,
+  approveItem, rejectItem
 });
 
 // ============================================================
