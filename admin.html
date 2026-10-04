@@ -80,6 +80,15 @@
         <button class="side-btn" onclick="showAdminPage('hki', this)">
           <i class="fas fa-certificate"></i> HKI
         </button>
+        <button class="side-btn" onclick="showAdminPage('hki_edukasi', this)">
+          <i class="fas fa-graduation-cap"></i> Edukasi HKI
+        </button>
+        <button class="side-btn" onclick="showAdminPage('hki_requests', this)">
+          <i class="fas fa-file-download"></i> Permintaan Akses
+        </button>
+        <button class="side-btn" onclick="showAdminPage('registrations', this)">
+          <i class="fas fa-user-plus"></i> Pendaftaran
+        </button>
         <button class="side-btn" onclick="showAdminPage('berita', this)">
           <i class="fas fa-newspaper"></i> Berita
         </button>
@@ -165,7 +174,7 @@
             </button>
           </div>
 
-          <!-- Info Approval — hanya muncul untuk Admin OPD via CSS class -->
+          <!-- Info Approval — untuk Admin OPD & Masyarakat -->
           <div id="crudApprovalInfo" class="info-box warning" style="display:none;">
             <i class="fas fa-clock"></i>
             <div>
@@ -214,6 +223,76 @@
           <div id="crudList" class="crud-list"></div>
         </div>
 
+        <!-- ==================== EDUKASI HKI ==================== -->
+        <div id="adm-hki-edukasi" class="adm-page">
+          <div class="page-head crud-head">
+            <div>
+              <h2><i class="fas fa-graduation-cap"></i> Edukasi HKI</h2>
+              <p>Kelola artikel & video edukasi seputar Hak Kekayaan Intelektual</p>
+            </div>
+            <button class="btn-primary" onclick="openEdukasiForm()">
+              <i class="fas fa-plus"></i> Tambah Edukasi
+            </button>
+          </div>
+
+          <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            <p>
+              Konten edukasi akan tampil di halaman <b>HKI</b> di index.html. Tipe yang tersedia:
+              <b>Artikel</b> (isi teks) dan <b>Video</b> (embed YouTube).
+            </p>
+          </div>
+
+          <div id="hkiEdukasiAdminList" class="crud-list"></div>
+        </div>
+
+        <!-- ==================== PERMINTAAN AKSES HKI ==================== -->
+        <div id="adm-hki-requests" class="adm-page">
+          <div class="page-head">
+            <h2><i class="fas fa-file-download"></i> Permintaan Akses Download HKI</h2>
+            <p>Permintaan dari pengunjung umum yang ingin mengunduh file HKI</p>
+          </div>
+
+          <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            <div>
+              <p>Alur permintaan akses download HKI:</p>
+              <p style="margin-top:4px;font-size:12px;line-height:1.7;">
+                1. Pengunjung klik <b>"Minta Akses Download"</b> di halaman HKI<br>
+                2. Isi nama, nomor WA, dan tujuan penggunaan<br>
+                3. Admin cek & klik <b>ACC</b> untuk menyetujui<br>
+                4. Kirim link download via <b>Chat WA</b>
+              </p>
+            </div>
+          </div>
+
+          <div id="hkiRequestsList" class="crud-list"></div>
+        </div>
+
+        <!-- ==================== PENDAFTARAN MASYARAKAT ==================== -->
+        <div id="adm-registrations" class="adm-page">
+          <div class="page-head">
+            <h2><i class="fas fa-user-plus"></i> Pendaftaran Masyarakat Umum</h2>
+            <p>Pendaftaran akun dari dosen, mahasiswa, pelajar, swasta, dan masyarakat umum</p>
+          </div>
+
+          <div class="info-box warning">
+            <i class="fas fa-shield-halved"></i>
+            <div>
+              <p><b>Alur Pembuatan Akun Masyarakat:</b></p>
+              <p style="margin-top:4px;font-size:12px;line-height:1.7;">
+                1. Masyarakat isi form pendaftaran di halaman utama<br>
+                2. Admin/Super Admin cek di halaman ini<br>
+                3. Klik <b>"Buat Akun"</b> → generate password otomatis<br>
+                4. Kirim kredensial (email + password) via <b>Chat WA</b><br>
+                5. Masyarakat login & akses 4 menu: Dashboard, Inovasi, Riset, HKI, Pelatihan
+              </p>
+            </div>
+          </div>
+
+          <div id="registrationsList" class="crud-list"></div>
+        </div>
+
         <!-- ==================== GALERI ==================== -->
         <div id="adm-galeri" class="adm-page">
           <div class="page-head">
@@ -255,15 +334,19 @@
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-super_admin">Super Admin</span>
-                Akses penuh — kelola semua data &amp; admin lain.
+                Akses penuh — kelola semua data &amp; admin lain + buat akun masyarakat.
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-admin">Admin</span>
-                CRUD semua data (semua OPD) + <b>approve/reject</b> data Admin OPD.
+                CRUD semua data (semua OPD) + <b>approve/reject</b> data Admin OPD &amp; Masyarakat.
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-admin_opd">Admin OPD</span>
-                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Galeri. Data <b>perlu ACC</b> Admin/Super Admin sebelum tampil di halaman utama.
+                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Galeri. Data <b>perlu ACC</b> Admin/Super Admin.
+              </p>
+              <p style="margin-bottom:6px;">
+                <span class="role-badge role-masyarakat">Masyarakat Umum</span>
+                Dosen, mahasiswa, pelajar, swasta. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan. Data <b>perlu ACC</b> Admin/Super Admin.
               </p>
               <p>
                 <span class="role-badge role-editor">Editor</span>
@@ -277,7 +360,7 @@
             <div>
               <p><b>Alur Persetujuan (Approval):</b></p>
               <p style="margin-top:4px;font-size:12px;line-height:1.7;">
-                1. <b>Admin OPD</b> submit data Inovasi / Riset / HKI → status <b>Menunggu ACC</b><br>
+                1. <b>Admin OPD / Masyarakat</b> submit data Inovasi / Riset / HKI → status <b>Menunggu ACC</b><br>
                 2. <b>Admin/Super Admin</b> cek di menu terkait → klik tombol <b>Setujui</b> atau <b>Tolak</b><br>
                 3. Data yang <b>disetujui</b> baru akan tampil di halaman utama (index.html)
               </p>
@@ -307,6 +390,18 @@
   </div>
 </div>
 
+<!-- ==================== MODAL: EDUKASI HKI ==================== -->
+<div class="modal" id="edukasiModal">
+  <div class="modal-content big">
+    <span class="close" onclick="closeEdukasiForm()">&times;</span>
+    <h2 id="edukasiFormTitle"><i class="fas fa-graduation-cap"></i> Tambah Edukasi HKI</h2>
+    <div id="edukasiFields"></div>
+    <button class="btn-primary full" onclick="saveEdukasi()">
+      <i class="fas fa-save"></i> Simpan
+    </button>
+  </div>
+</div>
+
 <!-- ==================== MODAL: USER ==================== -->
 <div class="modal" id="userModal">
   <div class="modal-content">
@@ -323,6 +418,7 @@
     <select id="u_role" onchange="toggleUserOpdField()">
       <option value="admin">Admin (CRUD semua data)</option>
       <option value="admin_opd">Admin OPD (hanya OPD sendiri + perlu ACC)</option>
+      <option value="masyarakat">Masyarakat Umum (dosen, mahasiswa, pelajar, swasta)</option>
       <option value="editor">Editor (tambah & edit saja)</option>
       <option value="super_admin">Super Admin (akses penuh)</option>
     </select>
