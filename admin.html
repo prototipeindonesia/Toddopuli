@@ -98,6 +98,10 @@
         <button class="side-btn" onclick="showAdminPage('pelatihan', this)">
           <i class="fas fa-chalkboard-teacher"></i> Pelatihan
         </button>
+        <!-- ⬇️ TAMBAHAN: Menu Kalender Kegiatan -->
+        <button class="side-btn" onclick="showAdminPage('kalender_kegiatan', this)">
+          <i class="fas fa-calendar-days"></i> Kalender Kegiatan
+        </button>
         <button class="side-btn" onclick="showAdminPage('database', this)">
           <i class="fas fa-database"></i> Database
         </button>
@@ -240,6 +244,63 @@
           <div id="crudList" class="crud-list"></div>
         </div>
 
+        <!-- ==================== KALENDER KEGIATAN ==================== -->
+        <div id="adm-kalender" class="adm-page">
+          <div class="page-head crud-head">
+            <div>
+              <h2><i class="fas fa-calendar-days"></i> Kalender Kegiatan</h2>
+              <p>Agenda kegiatan TODDOPULI — kelola jadwal, reminder, dan export ke Google Calendar</p>
+            </div>
+            <button class="btn-primary" id="kalenderAddBtn" onclick="openForm()">
+              <i class="fas fa-plus"></i> Tambah Kegiatan
+            </button>
+          </div>
+
+          <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            <div>
+              <p><b>Fitur Kalender Kegiatan:</b> Admin/Super Admin dapat menambah, mengedit, dan menghapus kegiatan. Admin OPD &amp; Masyarakat hanya dapat melihat.</p>
+              <p style="margin-top:4px;font-size:12px;">Reminder otomatis muncul untuk kegiatan dalam 24 jam. Klik tombol <i class="fab fa-google"></i> untuk menambahkan ke Google Calendar pribadi Anda.</p>
+            </div>
+          </div>
+
+          <div class="toolbar toolbar-flex">
+            <div class="toolbar-search">
+              <i class="fas fa-search toolbar-icon"></i>
+              <input type="text" id="kalenderSearch" placeholder="Cari kegiatan..." oninput="renderKalenderPage()">
+            </div>
+            <select id="kalenderPemilikFilter" onchange="renderKalenderPage()" style="max-width:200px;">
+              <option value="">Semua Pemilik</option>
+            </select>
+            <div class="toolbar-actions">
+              <button class="btn-tool" onclick="kalenderToday()" title="Hari Ini">
+                <i class="fas fa-calendar-day"></i> <span>Hari Ini</span>
+              </button>
+              <button class="btn-tool" onclick="kalenderPrevMonth()" title="Bulan Sebelumnya">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <button class="btn-tool" onclick="kalenderNextMonth()" title="Bulan Berikutnya">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+              <button class="btn-tool" id="kalenderViewToggle" onclick="toggleKalenderView()">
+                <i class="fas fa-list"></i> <span>List</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px;flex-wrap:wrap;gap:8px;">
+            <h3 id="kalenderMonthLabel" style="font-size:18px;color:var(--primary);font-weight:700;"></h3>
+            <span id="kalenderEventCount" style="font-size:12px;color:var(--gray);"></span>
+          </div>
+
+          <div id="kalenderGridWrap">
+            <div id="kalenderGrid" class="kalender-grid"></div>
+          </div>
+          <div id="kalenderListWrap" style="display:none;">
+            <div id="kalenderList" class="crud-list"></div>
+          </div>
+        </div>
+
         <!-- ==================== EDUKASI HKI ==================== -->
         <div id="adm-hki-edukasi" class="adm-page">
           <div class="page-head crud-head">
@@ -352,6 +413,7 @@
               <option value="inovasi">Inovasi</option>
               <option value="berita">Berita</option>
               <option value="pelatihan">Pelatihan</option>
+              <option value="kalender_kegiatan">Kalender Kegiatan</option>
             </select>
           </div>
           <div id="galeriList" class="galeri-grid"></div>
@@ -385,11 +447,11 @@
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-admin_opd">Admin OPD</span>
-                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Galeri. Data <b>perlu ACC</b> Admin/Super Admin.
+                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Kalender, Galeri. Data <b>perlu ACC</b> Admin/Super Admin.
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-masyarakat">Masyarakat Umum</span>
-                Dosen, mahasiswa, pelajar, swasta. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan. Data <b>perlu ACC</b> Admin/Super Admin.
+                Dosen, mahasiswa, pelajar, swasta. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Kalender. Data <b>perlu ACC</b> Admin/Super Admin.
               </p>
               <p>
                 <span class="role-badge role-editor">Editor</span>
