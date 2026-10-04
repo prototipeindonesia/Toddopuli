@@ -3,6 +3,7 @@
    Bapperida Kota Palopo
    Tema: Biru Navy Profesional
    + Admin OPD Support
+   + Approval/ACC System
 ============================================================ */
 
 /* ==================== RESET & VARIABEL ==================== */
@@ -233,7 +234,6 @@ main { padding: 40px 16px 60px; }
   font-size: 14px; outline: none; font-family: inherit;
   transition: 0.2s; background: var(--light);
 }
-/* Input dengan icon di dalamnya */
 .toolbar > .toolbar-icon ~ input { padding-left: 36px; }
 .toolbar input:focus, .toolbar select:focus {
   border-color: var(--primary); background: #fff;
@@ -442,7 +442,6 @@ main { padding: 40px 16px 60px; }
 .info-box p { font-size: 13px; color: var(--primary-dark); }
 .info-box a { color: var(--primary); font-weight: 700; text-decoration: underline; }
 
-/* Info box varian: warning (kuning) */
 .info-box.warning {
   background: #FEF3C7;
   border-left-color: var(--warning);
@@ -450,7 +449,6 @@ main { padding: 40px 16px 60px; }
 .info-box.warning i { color: var(--warning); }
 .info-box.warning p { color: #92400E; }
 
-/* Info box varian: locked (biru gelap, untuk OPD terkunci) */
 .info-box.locked {
   background: #DBEAFE;
   border-left-color: var(--primary);
@@ -510,14 +508,12 @@ main { padding: 40px 16px 60px; }
   display: block; font-size: 12px; color: var(--dark);
   margin-bottom: 6px; font-weight: 600;
 }
-/* Input URL khusus (link Google Drive) */
 .modal input[type="url"] {
   font-family: 'Courier New', monospace;
   font-size: 12px;
   letter-spacing: 0.2px;
 }
 
-/* Input OPD terkunci (untuk Admin OPD) */
 .modal input.opd-locked,
 .modal input[readonly] {
   background: #E2E8F0 !important;
@@ -531,10 +527,7 @@ main { padding: 40px 16px 60px; }
   background: #E2E8F0 !important;
 }
 
-/* Wrapper OPD di form user (di-inject via JS) */
-#u_opd_wrapper {
-  margin-bottom: 12px;
-}
+#u_opd_wrapper { margin-bottom: 12px; }
 #u_opd_wrapper select {
   width: 100%;
   padding: 11px 14px;
@@ -622,7 +615,7 @@ main { padding: 40px 16px 60px; }
 }
 
 
-/* ==================== AUTH SCREEN (LOGIN ADMIN) ==================== */
+/* ==================== AUTH SCREEN ==================== */
 .auth-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--primary-light) 100%);
@@ -833,10 +826,88 @@ main { padding: 40px 16px 60px; }
 .btn-del:hover:not(:disabled) { background: var(--danger); color: #fff; }
 
 
-/* ==================== CHARTS (DASHBOARD) — 4 CHART GRID ==================== */
+/* ============================================================
+   APPROVAL BADGE (Status Persetujuan)
+============================================================ */
+.approval-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.approval-approved {
+  background: #DCFCE7;
+  color: #166534;
+}
+.approval-pending {
+  background: #FEF3C7;
+  color: #92400E;
+  animation: pulsePending 2s ease-in-out infinite;
+}
+.approval-rejected {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+@keyframes pulsePending {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+
+/* ============================================================
+   APPROVE / REJECT BUTTONS
+============================================================ */
+.btn-approve,
+.btn-reject {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: 0.2s;
+}
+.btn-approve {
+  background: #DCFCE7;
+  color: #166534;
+  box-shadow: 0 1px 3px rgba(5,150,105,0.15);
+}
+.btn-approve:hover {
+  background: #059669;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5,150,105,0.3);
+}
+.btn-reject {
+  background: #FEE2E2;
+  color: #991B1B;
+  box-shadow: 0 1px 3px rgba(220,38,38,0.15);
+}
+.btn-reject:hover {
+  background: #DC2626;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220,38,38,0.3);
+}
+
+
+/* ============================================================
+   CHARTS (DASHBOARD) — 4 CHART GRID
+============================================================ */
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr); /* 2 kolom x 2 baris = 4 chart */
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   margin-bottom: 30px;
 }
@@ -1000,10 +1071,9 @@ main { padding: 40px 16px 60px; }
 
 
 /* ============================================================
-   RESPONSIVE - Semua media queries dikumpulkan di sini
+   RESPONSIVE
 ============================================================ */
 
-/* Tablet & mobile besar (max-width: 900px) */
 @media (max-width: 900px) {
   .nav {
     display: none; position: absolute; top: 100%; left: 0; right: 0;
@@ -1021,13 +1091,11 @@ main { padding: 40px 16px 60px; }
   .admin-sidebar { position: static; max-height: none; }
   .footer-grid { grid-template-columns: 1fr; gap: 20px; }
 
-  /* Chart grid: 1 kolom di tablet */
   .chart-grid { grid-template-columns: 1fr; }
   .chart-card { min-height: 280px; }
   .galeri-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* Mobile sedang (max-width: 600px) */
 @media (max-width: 600px) {
   .toolbar-flex { flex-direction: column; align-items: stretch; }
   .toolbar-flex .toolbar-search { min-width: 100%; }
@@ -1043,7 +1111,6 @@ main { padding: 40px 16px 60px; }
   .toolbar-actions { margin-left: 0; width: 100%; }
   .galeri-grid { grid-template-columns: repeat(2, 1fr); }
 
-  /* Toolbar Inovasi: filter jadi 2 kolom */
   .toolbar-inovasi .toolbar-search {
     flex: 1 1 100%;
     min-width: 100%;
@@ -1056,7 +1123,6 @@ main { padding: 40px 16px 60px; }
   }
 }
 
-/* Mobile kecil (max-width: 480px) */
 @media (max-width: 480px) {
   .btn-login span { display: none; }
   .btn-login { padding: 9px 12px; }
@@ -1087,17 +1153,16 @@ main { padding: 40px 16px 60px; }
   .toast-container { top: 10px; right: 10px; left: 10px; }
   .toast { min-width: auto; max-width: none; }
 
-  /* Toolbar Inovasi: filter jadi 1 kolom di HP kecil */
-  .toolbar-inovasi {
-    padding: 10px;
-  }
+  .toolbar-inovasi { padding: 10px; }
   .toolbar-inovasi select {
     flex: 1 1 100%;
     font-size: 12px;
     padding: 10px 12px;
   }
 
-  /* Chart di HP: tinggi lebih kecil */
   .chart-card { min-height: 250px; padding: 14px; }
   .chart-card canvas { max-height: 200px; min-height: 180px; }
+
+  /* Approval badge di HP: kecil */
+  .approval-badge { font-size: 10px; padding: 3px 10px; }
 }
