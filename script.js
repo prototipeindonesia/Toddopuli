@@ -1,5 +1,5 @@
 /* ============================================================
-   TODDOPULI v4.4 - Script Utama
+   TODDOPULI v4.5 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
@@ -8,6 +8,7 @@
    + PELATIHAN VIEWER untuk Admin OPD & Masyarakat
    + FIX EDIT ADMIN BUG
    + REQUEST AKSES DATA (Inovasi, Riset, Publikasi, Database)
+   + KALENDER KEGIATAN (Grid, List, Reminder, Export GCal, Filter)
 ============================================================ */
 
 import {
@@ -166,6 +167,20 @@ const KATEGORI = {
       { key:'singkatan', label:'Singkatan (opsional)', type:'text' },
       { key:'deskripsi', label:'Keterangan (opsional)', type:'textarea' }
     ]
+  },
+  kalender_kegiatan: {
+    nama: 'Kalender Kegiatan', icon: 'fa-calendar-days',
+    fields: [
+      { key:'judul', label:'Nama Kegiatan', type:'text', required:true },
+      { key:'pemilik', label:'Pemilik Kegiatan', type:'text', required:true },
+      { key:'tanggal_mulai', label:'Tanggal Mulai', type:'date', required:true },
+      { key:'jam_mulai', label:'Jam Mulai', type:'time', required:true },
+      { key:'tanggal_selesai', label:'Tanggal Selesai (kosongkan jika hanya 1 hari)', type:'date' },
+      { key:'jam_selesai', label:'Jam Selesai (opsional)', type:'time' },
+      { key:'deskripsi', label:'Deskripsi Kegiatan', type:'textarea', required:true },
+      { key:'gambar', label:'Gambar Kegiatan (opsional)', type:'image' },
+      { key:'link_kegiatan', label:'Link Kegiatan (URL daftar/info, opsional)', type:'text' }
+    ]
   }
 };
 
@@ -173,12 +188,12 @@ const KATEGORI = {
 // KONFIG KHUSUS
 // ============================================================
 const APPROVAL_KATEGORI = ['inovasi', 'riset', 'hki'];
-const CREATOR_ONLY_CREATE = ['pelatihan'];
+const CREATOR_ONLY_CREATE = ['pelatihan', 'kalender_kegiatan'];
 
 function needsApproval(k) { return APPROVAL_KATEGORI.includes(k); }
 function creatorOnly(k) { return CREATOR_ONLY_CREATE.includes(k); }
 function getApprovalStatus(d) { return d?.approval_status || 'approved'; }
-function isUrlField(key) { return ['gambar','dokumen','sertifikat','laporan','link_file'].includes(key); }
+function isUrlField(key) { return ['gambar','dokumen','sertifikat','laporan','link_file','link_kegiatan'].includes(key); }
 
 // ============================================================
 // STATE GLOBAL
@@ -190,7 +205,8 @@ let cachedData = {
   inovasi:[], riset:[], publikasi:[], hki:[],
   berita:[], pelatihan:[], database:[], opd:[],
   hki_edukasi:[], hki_requests:[], registrations:[],
-  access_requests: []
+  access_requests: [],
+  kalender_kegiatan: []
 };
 let cachedUsers = [];
 let editingId = null;
@@ -206,10 +222,18 @@ let chartBentukInstance = null;
 let isFirstSnapshot = true;
 
 // ============================================================
+// STATE KALENDER
+// ============================================================
+let kalenderMonth = new Date().getMonth();
+let kalenderYear  = new Date().getFullYear();
+let kalenderView  = 'grid'; // 'grid' | 'list'
+const remindedEventIds = new Set();
+
+// ============================================================
 // MENU PER ROLE
 // ============================================================
-const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'galeri'];
-const MASYARAKAT_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan'];
+const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'kalender_kegiatan', 'galeri'];
+const MASYARAKAT_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'kalender_kegiatan'];
 const ADMIN_OPD_STAT_CARDS = ['dashInovasi', 'dashRiset', 'dashHki', 'dashPelatihan'];
 
 // ============================================================
@@ -281,7 +305,7 @@ function canApprove() { return isSuperAdmin() || isAdmin(); }
 // FILTER DATA PER ROLE
 // ============================================================
 function filterDataForRole(kategori, list) {
-  if (kategori === 'pelatihan') return list;
+  if (kategori === 'pelatihan' || kategori === 'kalender_kegiatan') return list;
 
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return list.filter(d => d.opd === currentProfile?.opd);
@@ -306,7 +330,7 @@ function filterForPublic(kategori, list) {
 // PERMISSION PER ITEM
 // ============================================================
 function canEditItem(kategori, d) {
-  if (kategori === 'pelatihan') return isSuperAdmin() || isAdmin();
+  if (creatorOnly(kategori)) return isSuperAdmin() || isAdmin();
   if (isSuperAdmin() || isAdmin() || isEditor()) return true;
   if (isAdminOpd() || isMasyarakat()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd || d.createdBy === currentUser?.email;
@@ -317,7 +341,7 @@ function canEditItem(kategori, d) {
 }
 
 function canDeleteItem(kategori, d) {
-  if (kategori === 'pelatihan') return isSuperAdmin() || isAdmin();
+  if (creatorOnly(kategori)) return isSuperAdmin() || isAdmin();
   if (isSuperAdmin() || isAdmin()) return true;
   if (isAdminOpd() || isMasyarakat()) {
     if (kategori === 'inovasi') return d.opd === currentProfile?.opd || d.createdBy === currentUser?.email;
@@ -406,7 +430,10 @@ function startRealtimeListeners() {
       }
 
       if (isAdminPage()) {
-        if (currentAdminPage === k) renderCrud();
+        if (currentAdminPage === k) {
+          if (k === 'kalender_kegiatan') renderKalenderPage();
+          else renderCrud();
+        }
         else if (currentAdminPage === 'dashboard') { updateStats(); renderDashboardCharts(); }
         else if (currentAdminPage === 'galeri') renderGaleri();
       } else {
@@ -414,10 +441,11 @@ function startRealtimeListeners() {
           inovasi: renderInovasi, riset: renderRiset, publikasi: renderPublikasi,
           hki: () => { renderHki(); renderHkiWidget(); },
           berita: renderBerita, pelatihan: () => { renderPelatihan(); renderWidgetPelatihan(); },
-          database: renderDatabase
+          database: renderDatabase,
+          kalender_kegiatan: () => { renderWidgetKalender(); checkKalenderReminders(); }
         }[k];
         if (fn) fn();
-        if (['inovasi','berita','pelatihan'].includes(k)) renderPubGaleri();
+        if (['inovasi','berita','pelatihan','kalender_kegiatan'].includes(k)) renderPubGaleri();
         if (k === 'berita') renderWidgetBerita();
         updateStats();
       }
@@ -796,6 +824,7 @@ function toggleMenu() { $('navMenu')?.classList.toggle('show'); }
 // DETAIL MODAL
 // ============================================================
 function showDetail(k, id) {
+  if (k === 'kalender_kegiatan') return showKalenderDetail(id);
   const d = cachedData[k]?.find(x => x.id === id);
   if (!d) return;
   const cfg = KATEGORI[k];
@@ -815,14 +844,13 @@ function showDetail(k, id) {
     if (badges) html += `<div class="badge-row" style="margin-bottom:14px;">${badges}</div>`;
   }
   cfg.fields.forEach(f => {
-    if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik','akses_file'].includes(f.key)) return;
+    if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik','akses_file','link_kegiatan'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
       const val = f.type === 'date' ? formatTanggal(d[f.key]) : esc(d[f.key]);
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
 
-  // File buttons — handle akses Publik vs Terbatas
   const fileFields = ['laporan','dokumen'];
   fileFields.forEach(key => {
     if (!d[key]) return;
@@ -914,7 +942,7 @@ async function submitHkiRequest(hkiId) {
 }
 
 // ============================================================
-// REQUEST AKSES DATA (Inovasi, Riset, Publikasi, Database)
+// REQUEST AKSES DATA
 // ============================================================
 function openAccessRequest(kategori, docId, fileKey) {
   const d = cachedData[kategori]?.find(x => x.id === docId);
@@ -989,7 +1017,7 @@ async function submitAccessRequest(kategori, docId, fileKey) {
 // ============================================================
 function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
-  ['inovasi','berita','pelatihan'].forEach(k => {
+  ['inovasi','berita','pelatihan','kalender_kegiatan'].forEach(k => {
     if (filterKategori && filterKategori !== k) return;
     let list = cachedData[k];
     if (isAdminOpd() || isMasyarakat()) list = filterDataForRole(k, list);
@@ -1004,7 +1032,7 @@ function getGaleriItems(filterKategori = '', query = '') {
 }
 
 function buildGaleriCard(x) {
-  const meta = x.opd || x.peneliti || x.nama_inovator || formatTanggal(x.tanggal) || '-';
+  const meta = x.opd || x.peneliti || x.nama_inovator || x.pemilik || formatTanggal(x.tanggal) || '-';
   const imgSrc = getImageUrl(x.gambar);
   return `<div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
     <img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.style.opacity='0.3'">
@@ -1083,6 +1111,293 @@ function renderWidgetPelatihan() {
 }
 
 function renderHomeWidgets() { renderWidgetBerita(); renderWidgetPelatihan(); }
+
+// ============================================================
+// KALENDER KEGIATAN
+// ============================================================
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function formatEventDate(e) {
+  if (!e?.tanggal_mulai) return '-';
+  const start = formatTanggal(e.tanggal_mulai);
+  const sTime = e.jam_mulai ? `, ${e.jam_mulai}` : '';
+  if (!e.tanggal_selesai) return `${start}${sTime}`;
+  const end = formatTanggal(e.tanggal_selesai);
+  const eTime = e.jam_selesai ? `, ${e.jam_selesai}` : '';
+  return `${start}${sTime} — ${end}${eTime}`;
+}
+
+function getReminderLabel(e) {
+  if (!e?.tanggal_mulai) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(e.tanggal_mulai + 'T00:00:00');
+  const end   = new Date((e.tanggal_selesai || e.tanggal_mulai) + 'T23:59:59');
+  if (end < today) return null;
+  if (start <= today && end >= today) return { label: 'Hari ini', color: '#DC2626' };
+  const diff = Math.ceil((start - today) / 86400000);
+  if (diff === 1) return { label: 'Besok', color: '#F59E0B' };
+  if (diff <= 7) return { label: `${diff} hari lagi`, color: '#2563EB' };
+  return null;
+}
+
+function isEventOnDate(e, dateStr) {
+  if (!e?.tanggal_mulai) return false;
+  const end = e.tanggal_selesai || e.tanggal_mulai;
+  return dateStr >= e.tanggal_mulai && dateStr <= end;
+}
+
+function getKalenderFiltered() {
+  let events = [...(cachedData.kalender_kegiatan || [])];
+  const q = ($('kalenderSearch')?.value || '').toLowerCase();
+  const pemilik = $('kalenderPemilikFilter')?.value || '';
+  if (q) events = events.filter(e =>
+    (e.judul||'').toLowerCase().includes(q) ||
+    (e.deskripsi||'').toLowerCase().includes(q) ||
+    (e.pemilik||'').toLowerCase().includes(q));
+  if (pemilik) events = events.filter(e => e.pemilik === pemilik);
+  return events;
+}
+
+function populatePemilikFilter() {
+  const sel = $('kalenderPemilikFilter');
+  if (!sel) return;
+  const cur = sel.value;
+  const list = [...new Set((cachedData.kalender_kegiatan||[]).map(e => e.pemilik).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Semua Pemilik</option>' +
+    list.map(p => `<option value="${esc(p)}"${p===cur?' selected':''}>${esc(p)}</option>`).join('');
+}
+
+function renderKalenderPage() {
+  const page = $('adm-kalender');
+  if (!page) return;
+  const addBtn = $('kalenderAddBtn');
+  if (addBtn) addBtn.style.display = isAdminOrAbove() ? 'inline-flex' : 'none';
+  populatePemilikFilter();
+  renderKalenderGrid();
+  renderKalenderList();
+  const wrapG = $('kalenderGridWrap');
+  const wrapL = $('kalenderListWrap');
+  const toggle = $('kalenderViewToggle');
+  if (wrapG) wrapG.style.display = kalenderView === 'grid' ? 'block' : 'none';
+  if (wrapL) wrapL.style.display = kalenderView === 'list' ? 'block' : 'none';
+  if (toggle) {
+    toggle.innerHTML = kalenderView === 'grid'
+      ? '<i class="fas fa-list"></i> <span>List</span>'
+      : '<i class="fas fa-calendar-alt"></i> <span>Grid</span>';
+  }
+}
+
+function renderKalenderGrid() {
+  const container = $('kalenderGrid');
+  if (!container) return;
+  const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const label = $('kalenderMonthLabel');
+  if (label) label.textContent = `${bulan[kalenderMonth]} ${kalenderYear}`;
+
+  const events = getKalenderFiltered();
+  const inMonth = events.filter(e => {
+    if (!e.tanggal_mulai) return false;
+    const end = e.tanggal_selesai || e.tanggal_mulai;
+    const mStart = `${kalenderYear}-${String(kalenderMonth+1).padStart(2,'0')}-01`;
+    const mEnd   = `${kalenderYear}-${String(kalenderMonth+1).padStart(2,'0')}-31`;
+    return !(end < mStart || e.tanggal_mulai > mEnd);
+  });
+  const cnt = $('kalenderEventCount');
+  if (cnt) cnt.textContent = `${inMonth.length} kegiatan bulan ini`;
+
+  const firstDay = new Date(kalenderYear, kalenderMonth, 1);
+  const daysInMonth = new Date(kalenderYear, kalenderMonth + 1, 0).getDate();
+  const offset = (firstDay.getDay() + 6) % 7;
+  const today = todayStr();
+
+  let html = '';
+  ['Sen','Sel','Rab','Kam','Jum','Sab','Min'].forEach(d => {
+    html += `<div class="kal-day-name">${d}</div>`;
+  });
+  for (let i = 0; i < offset; i++) html += `<div class="kal-day kal-day-empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${kalenderYear}-${String(kalenderMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayEvents = inMonth.filter(e => isEventOnDate(e, ds));
+    const cls = `kal-day${ds===today?' kal-day-today':''}${dayEvents.length?' kal-day-has-event':''}`;
+    html += `<div class="${cls}">`;
+    html += `<div class="kal-day-num">${d}</div>`;
+    if (dayEvents.length) {
+      html += '<div class="kal-day-events">';
+      dayEvents.slice(0,3).forEach(e => {
+        html += `<div class="kal-event-chip" onclick="event.stopPropagation();showKalenderDetail('${e.id}')" title="${esc(e.judul)}">${esc(e.judul)}</div>`;
+      });
+      if (dayEvents.length > 3) html += `<div class="kal-event-more">+${dayEvents.length-3} lainnya</div>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function renderKalenderList() {
+  const container = $('kalenderList');
+  if (!container) return;
+  const events = getKalenderFiltered()
+    .sort((a,b) => (a.tanggal_mulai||'').localeCompare(b.tanggal_mulai||''));
+  if (!events.length) {
+    container.innerHTML = emptyMsg('Belum ada kegiatan.');
+    return;
+  }
+  const canManage = isAdminOrAbove();
+  container.innerHTML = events.map(e => {
+    const imgSrc = e.gambar ? getImageUrl(e.gambar) : '';
+    const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
+    const reminder = getReminderLabel(e);
+    const reminderBadge = reminder
+      ? `<span class="badge" style="background:${reminder.color}20;color:${reminder.color};font-weight:700;">⏰ ${reminder.label}</span>` : '';
+    const editable = canEditItem('kalender_kegiatan', e);
+    const deletable = canDeleteItem('kalender_kegiatan', e);
+    return `<div class="crud-item" style="border-left-color:var(--primary-light);">
+      ${img}
+      <h4><i class="fas fa-calendar-day"></i> ${esc(e.judul)}</h4>
+      <p style="color:#1E40AF;font-weight:600;font-size:12px;margin-bottom:6px;">
+        <i class="fas fa-clock"></i> ${esc(formatEventDate(e))}
+      </p>
+      <p>${esc(String(e.deskripsi||'').substring(0,120))}${(e.deskripsi||'').length>120?'...':''}</p>
+      <div class="badge-row">
+        <span class="badge"><i class="fas fa-user"></i> ${esc(e.pemilik||'-')}</span>
+        ${reminderBadge}
+      </div>
+      <div class="crud-actions">
+        <button class="btn-tool" onclick="showKalenderDetail('${e.id}')"><i class="fas fa-eye"></i></button>
+        <button class="btn-tool" onclick="exportToGoogleCalendar('${e.id}')" title="Export ke Google Calendar"><i class="fab fa-google"></i></button>
+        ${canManage ? `
+          <button class="btn-edit" onclick="openForm('${e.id}')" ${editable?'':'disabled'}><i class="fas fa-pen"></i></button>
+          <button class="btn-del" onclick="hapusData('${e.id}')" ${deletable?'':'disabled'}><i class="fas fa-trash"></i></button>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showKalenderDetail(id) {
+  const d = cachedData.kalender_kegiatan?.find(x => x.id === id);
+  if (!d) return;
+  let html = `<h2><i class="fas fa-calendar-days"></i> ${esc(d.judul)}</h2>`;
+  if (d.gambar) {
+    html += `<img class="preview-img" src="${esc(getImageUrl(d.gambar))}" onerror="this.style.display='none'">`;
+  }
+  const reminder = getReminderLabel(d);
+  if (reminder) html += `<div style="margin-bottom:12px;"><span class="approval-badge" style="background:${reminder.color}20;color:${reminder.color};"><i class="fas fa-bell"></i> ${reminder.label}</span></div>`;
+  html += `<div class="detail-info-row"><b><i class="fas fa-clock"></i> Waktu</b><span>${esc(formatEventDate(d))}</span></div>`;
+  if (d.pemilik) html += `<div class="detail-info-row"><b><i class="fas fa-user"></i> Pemilik</b><span>${esc(d.pemilik)}</span></div>`;
+  if (d.deskripsi) html += `<p style="margin:14px 0 10px;"><b>Deskripsi:</b><br>${esc(d.deskripsi).replace(/\n/g,'<br>')}</p>`;
+  if (d.link_kegiatan) {
+    html += `<a href="${esc(d.link_kegiatan)}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:10px;text-decoration:none;display:inline-flex;"><i class="fas fa-external-link-alt"></i> Info / Registrasi</a> `;
+  }
+  html += `<button class="btn-primary" style="margin-top:10px;background:#059669;" onclick="exportToGoogleCalendar('${d.id}')"><i class="fas fa-calendar-plus"></i> Tambah ke Google Calendar</button>`;
+  $('detailContent').innerHTML = html;
+  $('detailModal').classList.add('show');
+}
+
+function exportToGoogleCalendar(id) {
+  const d = cachedData.kalender_kegiatan?.find(x => x.id === id);
+  if (!d || !d.tanggal_mulai) return toast('error', 'Gagal', 'Tanggal kegiatan tidak valid.');
+  const startDate = d.tanggal_mulai.replace(/-/g, '');
+  const startTime = (d.jam_mulai || '08:00').replace(/:/g, '') + '00';
+  let dateRange;
+  if (d.tanggal_selesai) {
+    const endDate = d.tanggal_selesai.replace(/-/g, '');
+    const endTime = (d.jam_selesai || '17:00').replace(/:/g, '') + '00';
+    dateRange = `${startDate}T${startTime}/${endDate}T${endTime}`;
+  } else if (d.jam_mulai) {
+    const [h, m] = d.jam_mulai.split(':').map(Number);
+    const endH = String((h + 1) % 24).padStart(2,'0');
+    const endM = String(m).padStart(2,'0');
+    dateRange = `${startDate}T${startTime}/${startDate}T${endH}${endM}00`;
+  } else {
+    const next = new Date(d.tanggal_mulai);
+    next.setDate(next.getDate() + 1);
+    const endDate = next.toISOString().slice(0,10).replace(/-/g,'');
+    dateRange = `${startDate}/${endDate}`;
+  }
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: d.judul || '',
+    dates: dateRange,
+    details: d.deskripsi || '',
+    location: d.pemilik || ''
+  });
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
+  toast('success', 'Membuka Google Calendar', 'Kegiatan siap ditambahkan.');
+}
+
+function kalenderPrevMonth() {
+  kalenderMonth--;
+  if (kalenderMonth < 0) { kalenderMonth = 11; kalenderYear--; }
+  renderKalenderGrid();
+}
+function kalenderNextMonth() {
+  kalenderMonth++;
+  if (kalenderMonth > 11) { kalenderMonth = 0; kalenderYear++; }
+  renderKalenderGrid();
+}
+function kalenderToday() {
+  const d = new Date();
+  kalenderMonth = d.getMonth();
+  kalenderYear = d.getFullYear();
+  renderKalenderGrid();
+}
+function toggleKalenderView() {
+  kalenderView = kalenderView === 'grid' ? 'list' : 'grid';
+  renderKalenderPage();
+}
+
+function renderWidgetKalender() {
+  const container = $('widgetKalender');
+  if (!container) return;
+  const today = todayStr();
+  const events = (cachedData.kalender_kegiatan || [])
+    .filter(e => (e.tanggal_selesai || e.tanggal_mulai) >= today)
+    .sort((a,b) => (a.tanggal_mulai||'').localeCompare(b.tanggal_mulai||''))
+    .slice(0, 4);
+  if (!events.length) {
+    container.innerHTML = `<div class="widget-empty"><i class="fas fa-calendar-days"></i>Belum ada kegiatan mendatang.</div>`;
+    return;
+  }
+  container.innerHTML = events.map(e => {
+    const imgSrc = e.gambar ? getImageUrl(e.gambar) : '';
+    const imgHtml = imgSrc
+      ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-calendar-days&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
+      : `<div class="widget-item-img placeholder"><i class="fas fa-calendar-days"></i></div>`;
+    const reminder = getReminderLabel(e);
+    const rBadge = reminder
+      ? `<span class="widget-item-date" style="color:${reminder.color};font-weight:700;"><i class="fas fa-bell"></i> ${reminder.label}</span>` : '';
+    return `<div class="widget-item" onclick="showKalenderDetail('${e.id}')">
+      ${imgHtml}
+      <div class="widget-item-body">
+        <h4>${esc(e.judul)}</h4>
+        <p><i class="fas fa-clock"></i> ${esc(formatEventDate(e))}</p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          <span class="widget-item-date"><i class="fas fa-user"></i> ${esc(e.pemilik||'-')}</span>
+          ${rBadge}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function checkKalenderReminders() {
+  const events = cachedData.kalender_kegiatan || [];
+  const now = new Date();
+  const soon = new Date(now.getTime() + 24*60*60*1000);
+  events.forEach(e => {
+    if (!e.tanggal_mulai || remindedEventIds.has(e.id)) return;
+    const start = new Date(`${e.tanggal_mulai}T${e.jam_mulai || '00:00'}`);
+    if (start >= now && start <= soon) {
+      remindedEventIds.add(e.id);
+      toast('info', '⏰ Reminder Kegiatan', `"${e.judul}" — ${formatEventDate(e)}`, 8000);
+    }
+  });
+}
 
 // ============================================================
 // LOGIN & REGISTRASI
@@ -1210,13 +1525,16 @@ async function initAdmin() {
   await loadAllData();
   updateStats();
   renderActivity();
+  checkKalenderReminders();
   startRealtimeListeners();
   applyRoleToUI();
   injectStatusFilterToToolbar();
   let startPage = 'dashboard';
   if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(startPage)) startPage = ADMIN_OPD_MENUS[0];
   if (isMasyarakat() && !MASYARAKAT_MENUS.includes(startPage)) startPage = MASYARAKAT_MENUS[0];
-  showAdminPage(startPage);
+  const btnAktif = [...document.querySelectorAll('.side-btn')]
+    .find(b => (b.getAttribute('onclick')||'').includes(`'${startPage}'`));
+  showAdminPage(startPage, btnAktif);
 }
 
 // ============================================================
@@ -1263,7 +1581,7 @@ function applyRoleToUI() {
   }
   const galeriSub = $('galeriSubtitle');
   if (galeriSub) galeriSub.textContent = (isAdminOpd() || isMasyarakat())
-    ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
+    ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Berita, Pelatihan, dan Kalender';
 
   updateStatusFilterVisibility();
   updatePelatihanInfoVisibility();
@@ -1323,6 +1641,7 @@ const PAGE_TITLES = {
   registrations: ['Pendaftaran Masyarakat', 'Pendaftaran akun baru dari masyarakat umum'],
   berita: ['Berita', 'Kelola berita & informasi'],
   pelatihan: ['Pelatihan', 'Kelola program pelatihan'],
+  kalender_kegiatan: ['Kalender Kegiatan', 'Kelola agenda kegiatan TODDOPULI'],
   database: ['Database', 'Kelola dataset & dokumen'],
   opd: ['OPD', 'Kelola daftar OPD'],
   galeri: ['Galeri Foto', 'Semua gambar dari berbagai kategori'],
@@ -1362,6 +1681,9 @@ function showAdminPage(page, btn) {
   } else if (page === 'registrations') {
     const el = $('adm-registrations'); if (el) el.classList.add('active');
     renderRegistrations();
+  } else if (page === 'kalender_kegiatan') {
+    const el = $('adm-kalender'); if (el) el.classList.add('active');
+    renderKalenderPage();
   } else {
     $('adm-crud').classList.add('active');
     const [t, s] = PAGE_TITLES[page] || ['Kelola Data',''];
@@ -1449,7 +1771,7 @@ function renderDashboardCharts() {
 // ============================================================
 function renderCrud() {
   const k = currentAdminPage;
-  if (['dashboard','galeri','users','hki_edukasi','hki_requests','registrations','access_requests'].includes(k)) return;
+  if (['dashboard','galeri','users','hki_edukasi','hki_requests','registrations','access_requests','kalender_kegiatan'].includes(k)) return;
   const container = $('crudList'); if (!container) return;
   const q = ($('crudSearch')?.value || '').toLowerCase();
   const statusFilter = $('crudStatusFilter')?.value || '';
@@ -2031,7 +2353,7 @@ async function rejectHkiRequest(id) {
 }
 
 // ============================================================
-// ACCESS REQUESTS (Inovasi, Riset, Publikasi, Database)
+// ACCESS REQUESTS
 // ============================================================
 function renderAccessRequests() {
   const c = $('accessRequestsList'); if (!c) return;
@@ -2322,7 +2644,7 @@ function globalSearch() {
   const q = $('globalSearch')?.value.trim();
   if (!q) return toast('error', 'Kosong', 'Isi kata kunci.');
   const ql = q.toLowerCase(); const results = [];
-  ['inovasi','riset','publikasi','hki','berita','pelatihan','database'].forEach(k => {
+  ['inovasi','riset','publikasi','hki','berita','pelatihan','database','kalender_kegiatan'].forEach(k => {
     let items = isAdminPage() ? (cachedData[k]||[]) : filterForPublic(k, cachedData[k]||[]);
     items.forEach(d => {
       if ((d.judul||'').toLowerCase().includes(ql) || (d.deskripsi||'').toLowerCase().includes(ql))
@@ -2394,7 +2716,12 @@ Object.assign(window, {
   renderWidgetBerita, renderWidgetPelatihan, renderHomeWidgets,
   updatePelatihanInfoVisibility, updateCrudToolbarVisibility,
   openAccessRequest, submitAccessRequest, renderAccessRequests,
-  waAccessRequest, approveAccessRequest, rejectAccessRequest
+  waAccessRequest, approveAccessRequest, rejectAccessRequest,
+  // Kalender Kegiatan
+  renderKalenderPage, renderKalenderGrid, renderKalenderList,
+  showKalenderDetail, exportToGoogleCalendar, renderWidgetKalender,
+  kalenderPrevMonth, kalenderNextMonth, kalenderToday, toggleKalenderView,
+  formatEventDate, checkKalenderReminders
 });
 
 // ============================================================
@@ -2409,6 +2736,7 @@ if (!isAdminPage()) {
       renderHki(); renderHkiWidget(); renderHkiEdukasi();
       renderBerita(); renderPelatihan(); renderDatabase();
       renderPubGaleri(); renderHomeWidgets();
+      renderWidgetKalender(); checkKalenderReminders();
       startRealtimeListeners();
     } catch (e) { console.error('Init error:', e); toast('error', 'Gagal Memuat', 'Periksa koneksi.'); }
   })();
