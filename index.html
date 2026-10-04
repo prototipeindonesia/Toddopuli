@@ -126,11 +126,25 @@
   <!-- INOVASI -->
   <section id="page-inovasi" class="page">
     <h2 class="section-title"><i class="fas fa-lightbulb"></i> Inovasi Palopo</h2>
-    <div class="toolbar">
-      <input type="text" id="searchInovasi" placeholder="Cari inovasi..." oninput="renderInovasi()">
+    <div class="toolbar toolbar-inovasi">
+      <div class="toolbar-search">
+        <i class="fas fa-search toolbar-icon"></i>
+        <input type="text" id="searchInovasi" placeholder="Cari judul / OPD / inovator..." oninput="renderInovasi()">
+      </div>
       <select id="filterTahunInovasi" onchange="renderInovasi()">
         <option value="">Semua Tahun</option>
-        <option>2025</option><option>2024</option><option>2023</option><option>2022</option>
+        <option>2025</option><option>2024</option><option>2023</option><option>2022</option><option>2021</option>
+      </select>
+      <select id="filterJenisInovasi" onchange="renderInovasi()">
+        <option value="">Semua Jenis</option>
+        <option>Layanan Publik</option>
+        <option>Tata Pemerintahan</option>
+        <option>Lainnya</option>
+      </select>
+      <select id="filterBentukInovasi" onchange="renderInovasi()">
+        <option value="">Semua Bentuk</option>
+        <option>Digital</option>
+        <option>Non Digital</option>
       </select>
     </div>
     <div id="listInovasi" class="list-grid"><div class="loading">Memuat data...</div></div>
@@ -140,6 +154,7 @@
   <section id="page-riset" class="page">
     <h2 class="section-title"><i class="fas fa-flask"></i> Riset Palopo</h2>
     <div class="toolbar">
+      <i class="fas fa-search toolbar-icon"></i>
       <input type="text" id="searchRiset" placeholder="Cari riset..." oninput="renderRiset()">
     </div>
     <div id="listRiset" class="list-grid"><div class="loading">Memuat data...</div></div>
@@ -149,6 +164,7 @@
   <section id="page-publikasi" class="page">
     <h2 class="section-title"><i class="fas fa-book"></i> Publikasi</h2>
     <div class="toolbar">
+      <i class="fas fa-search toolbar-icon"></i>
       <input type="text" id="searchPub" placeholder="Cari publikasi..." oninput="renderPublikasi()">
     </div>
     <div id="listPublikasi" class="list-grid"><div class="loading">Memuat data...</div></div>
@@ -162,6 +178,7 @@
       <p>Untuk menambah/mengedit data HKI, silakan login sebagai admin melalui <a href="admin.html">Panel Admin</a>.</p>
     </div>
     <div class="toolbar">
+      <i class="fas fa-search toolbar-icon"></i>
       <input type="text" id="searchHki" placeholder="Cari HKI..." oninput="renderHki()">
     </div>
     <div id="listHki" class="list-grid"><div class="loading">Memuat data...</div></div>
@@ -177,6 +194,7 @@
   <section id="page-pelatihan" class="page">
     <h2 class="section-title"><i class="fas fa-chalkboard-teacher"></i> Pelatihan</h2>
     <div class="toolbar">
+      <i class="fas fa-search toolbar-icon"></i>
       <input type="text" id="searchPelatihan" placeholder="Cari pelatihan..." oninput="renderPelatihan()">
     </div>
     <div id="listPelatihan" class="list-grid"><div class="loading">Memuat data...</div></div>
@@ -186,6 +204,7 @@
   <section id="page-database" class="page">
     <h2 class="section-title"><i class="fas fa-database"></i> Database</h2>
     <div class="toolbar">
+      <i class="fas fa-search toolbar-icon"></i>
       <input type="text" id="searchDb" placeholder="Cari data..." oninput="renderDatabase()">
     </div>
     <div id="listDatabase" class="list-grid"><div class="loading">Memuat data...</div></div>
