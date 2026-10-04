@@ -1,7 +1,8 @@
 /* ============================================================
-   TODDOPULI v3.1 - Script Utama
+   TODDOPULI v3.2 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
+   + Google Drive Link + OPD Management + Inovasi Extended
 ============================================================ */
 
 import {
@@ -44,11 +45,20 @@ const KATEGORI = {
     nama: 'Inovasi', icon: 'fa-lightbulb',
     fields: [
       { key:'judul', label:'Judul Inovasi', type:'text', required:true },
-      { key:'opd', label:'OPD Pengusul', type:'text', required:true },
+      { key:'nama_inovator', label:'Nama Inovator', type:'text', required:true },
+      { key:'opd', label:'OPD Pengusul', type:'opd_select', required:true },
+      { key:'jenis_inovasi', label:'Jenis Inovasi', type:'select',
+        options:['Layanan Publik','Tata Pemerintahan','Lainnya'], required:true },
+      { key:'bentuk_inovasi', label:'Bentuk Inovasi', type:'select',
+        options:['Digital','Non Digital'], required:true },
       { key:'tahun', label:'Tahun', type:'text', required:true },
-      { key:'status', label:'Status', type:'select', options:['Aktif','Pilot','Draft','Selesai'] },
+      { key:'status', label:'Status', type:'select',
+        options:['Aktif','Pilot','Draft','Selesai'] },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
-      { key:'gambar', label:'Gambar/Poster', type:'image' }
+      { key:'manfaat', label:'Manfaat', type:'textarea', required:true },
+      { key:'hasil', label:'Hasil', type:'textarea', required:true },
+      { key:'laporan', label:'Link Laporan Inovasi (Google Drive, opsional)', type:'text' },
+      { key:'gambar', label:'Link Gambar Inovasi (Google Drive — JPG/PNG/JPEG)', type:'text' }
     ]
   },
   riset: {
@@ -58,17 +68,18 @@ const KATEGORI = {
       { key:'peneliti', label:'Peneliti', type:'text', required:true },
       { key:'tahun', label:'Tahun', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
-      { key:'dokumen', label:'File Dokumen (PDF)', type:'file' }
+      { key:'dokumen', label:'Link Dokumen (Google Drive)', type:'text' }
     ]
   },
   publikasi: {
     nama: 'Publikasi', icon: 'fa-book',
     fields: [
       { key:'judul', label:'Judul Publikasi', type:'text', required:true },
-      { key:'jenis', label:'Jenis', type:'select', options:['Laporan','Jurnal','Profil','Buku','Artikel'] },
+      { key:'jenis', label:'Jenis', type:'select',
+        options:['Laporan','Jurnal','Profil','Buku','Artikel'] },
       { key:'tahun', label:'Tahun', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
-      { key:'dokumen', label:'File Publikasi (PDF)', type:'file' }
+      { key:'dokumen', label:'Link Publikasi (Google Drive)', type:'text' }
     ]
   },
   hki: {
@@ -78,9 +89,10 @@ const KATEGORI = {
       { key:'pemilik', label:'Pemilik', type:'text', required:true },
       { key:'nomor', label:'Nomor Pendaftaran', type:'text', required:true },
       { key:'tahun', label:'Tahun', type:'text', required:true },
-      { key:'jenis', label:'Jenis HKI', type:'select', options:['Hak Cipta','Merek','Paten','Desain Industri'] },
+      { key:'jenis', label:'Jenis HKI', type:'select',
+        options:['Hak Cipta','Merek','Paten','Desain Industri'] },
       { key:'deskripsi', label:'Deskripsi', type:'textarea' },
-      { key:'sertifikat', label:'File Sertifikat (PDF)', type:'file' }
+      { key:'sertifikat', label:'Link Sertifikat (Google Drive)', type:'text' }
     ]
   },
   berita: {
@@ -108,10 +120,72 @@ const KATEGORI = {
       { key:'judul', label:'Nama Dataset', type:'text', required:true },
       { key:'kategori', label:'Kategori', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
-      { key:'dokumen', label:'File Dataset', type:'file' }
+      { key:'dokumen', label:'Link Dataset (Google Drive)', type:'text' }
+    ]
+  },
+  opd: {
+    nama: 'OPD', icon: 'fa-building',
+    fields: [
+      { key:'judul', label:'Nama OPD', type:'text', required:true },
+      { key:'singkatan', label:'Singkatan (opsional)', type:'text' },
+      { key:'deskripsi', label:'Keterangan (opsional)', type:'textarea' }
     ]
   }
 };
+
+// ============================================================
+// HELPER: URL FIELDS
+// ============================================================
+const URL_KEYS = ['gambar','dokumen','sertifikat','laporan'];
+const isUrlField = (key) => URL_KEYS.includes(key);
+
+// ============================================================
+// HELPER: NORMALISASI URL GOOGLE DRIVE
+// ============================================================
+function extractDriveFileId(url) {
+  if (!url) return null;
+  const s = String(url).trim();
+  if (!s) return null;
+  const m1 = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m1) return m1[1];
+  const m2 = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m2) return m2[1];
+  const m3 = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m3) return m3[1];
+  return null;
+}
+
+/** Untuk link dokumen/sertifikat → preview (bisa dibuka di tab baru) */
+function normalizeDriveUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+  if (!s) return '';
+  if (!s.includes('drive.google.com') && !s.includes('docs.google.com')) return s;
+  const fileId = extractDriveFileId(s);
+  if (!fileId) return s;
+  return `https://drive.google.com/file/d/${fileId}/preview`;
+}
+
+/** Untuk gambar → thumbnail (bisa dipakai di <img src>) */
+function normalizeDriveImageUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+  if (!s) return '';
+  if (!s.includes('drive.google.com') && !s.includes('docs.google.com')) return s;
+  const fileId = extractDriveFileId(s);
+  if (!fileId) return s;
+  // Google Drive thumbnail endpoint — works with <img>
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+}
+
+/** Ambil URL dari gambar (baik drive maupun cloudinary) */
+function getImageUrl(url) {
+  if (!url) return '';
+  if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
+    return normalizeDriveImageUrl(url);
+  }
+  return url;
+}
 
 // ============================================================
 // STATE GLOBAL
@@ -121,7 +195,7 @@ let currentProfile = null;
 let currentAdminPage = 'dashboard';
 let cachedData = {
   inovasi:[], riset:[], publikasi:[], hki:[],
-  berita:[], pelatihan:[], database:[]
+  berita:[], pelatihan:[], database:[], opd:[]
 };
 let cachedUsers = [];
 let editingId = null;
@@ -131,7 +205,9 @@ let pendingUploadFile = null;
 let unsubscribers = [];
 let chartTahunInstance = null;
 let chartOpdInstance = null;
-let isFirstSnapshot = true;  // Untuk hindari toast "Data Baru" saat load pertama
+let chartJenisInstance = null;
+let chartBentukInstance = null;
+let isFirstSnapshot = true;
 
 // ============================================================
 // UTIL
@@ -151,7 +227,7 @@ function formatTanggal(t) {
 }
 
 // ============================================================
-// TOAST NOTIFICATION
+// TOAST
 // ============================================================
 function toast(type, title, msg, duration = 4000) {
   const container = $('toastContainer');
@@ -179,7 +255,7 @@ function toast(type, title, msg, duration = 4000) {
 }
 
 // ============================================================
-// ROLE / PERMISSION
+// ROLE
 // ============================================================
 function role() { return currentProfile?.role || null; }
 function isSuperAdmin() { return role() === 'super_admin'; }
@@ -206,7 +282,6 @@ async function loadAllData() {
 // REALTIME LISTENER
 // ============================================================
 function startRealtimeListeners() {
-  // Hentikan listener lama
   unsubscribers.forEach(u => { try { u(); } catch {} });
   unsubscribers = [];
   isFirstSnapshot = true;
@@ -218,7 +293,6 @@ function startRealtimeListeners() {
         const prevLen = cachedData[k].length;
         cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        // Toast hanya kalau memang ADA data baru (bukan load pertama)
         if (!isFirstSnapshot && prevLen > 0) {
           const added = snap.docChanges().filter(c => c.type === 'added');
           added.forEach(c => {
@@ -227,7 +301,6 @@ function startRealtimeListeners() {
           });
         }
 
-        // Refresh UI sesuai halaman aktif
         if (isAdminPage()) {
           if (currentAdminPage === k) renderCrud();
           else if (currentAdminPage === 'dashboard') {
@@ -237,7 +310,6 @@ function startRealtimeListeners() {
             renderGaleri();
           }
         } else {
-          // Halaman publik
           const renderFn = {
             inovasi: renderInovasi,
             riset: renderRiset,
@@ -257,7 +329,6 @@ function startRealtimeListeners() {
     unsubscribers.push(unsub);
   });
 
-  // Users listener (khusus super admin)
   if (isAdminPage() && isSuperAdmin()) {
     const unsub = onSnapshot(
       collection(db, 'users'),
@@ -270,12 +341,11 @@ function startRealtimeListeners() {
     unsubscribers.push(unsub);
   }
 
-  // Setelah 2 detik, snapshot sudah bukan "pertama" lagi
   setTimeout(() => { isFirstSnapshot = false; }, 2000);
 }
 
 // ============================================================
-// RENDER STATISTIK
+// STATISTIK
 // ============================================================
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
@@ -296,10 +366,12 @@ function emptyMsg(text = 'Belum ada data.') {
   return `<div class="loading"><i class="fas fa-inbox" style="font-size:36px;opacity:.4;display:block;margin-bottom:10px;"></i>${text}</div>`;
 }
 
+// ============================================================
+// CARD BUILDER
+// ============================================================
 function buildCard(d, k, extraLabel = '') {
-  const img = d.gambar
-    ? `<img class="thumb" src="${esc(d.gambar)}" alt="${esc(d.judul)}" loading="lazy">`
-    : '';
+  const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+  const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="${esc(d.judul)}" loading="lazy" onerror="this.style.display='none'">` : '';
   const badge = extraLabel ? `<span class="badge">${esc(extraLabel)}</span>` : '';
   const desc = String(d.deskripsi || '');
   const descCut = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
@@ -321,7 +393,8 @@ function renderInovasi() {
   let d = cachedData.inovasi;
   if (q) d = d.filter(x =>
     (x.judul||'').toLowerCase().includes(q) ||
-    (x.opd||'').toLowerCase().includes(q)
+    (x.opd||'').toLowerCase().includes(q) ||
+    (x.nama_inovator||'').toLowerCase().includes(q)
   );
   if (th) d = d.filter(x => x.tahun === th);
   $('listInovasi').innerHTML = d.length
@@ -388,7 +461,7 @@ function renderDatabase() {
 }
 
 // ============================================================
-// GALERI (PUBLIK & ADMIN)
+// GALERI
 // ============================================================
 function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
@@ -406,9 +479,10 @@ function getGaleriItems(filterKategori = '', query = '') {
 }
 
 function buildGaleriCard(x) {
-  const meta = x.opd || x.peneliti || formatTanggal(x.tanggal) || '-';
+  const meta = x.opd || x.peneliti || x.nama_inovator || formatTanggal(x.tanggal) || '-';
+  const imgSrc = getImageUrl(x.gambar);
   return `<div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
-    <img src="${esc(x.gambar)}" alt="${esc(x.judul)}" loading="lazy">
+    <img src="${esc(imgSrc)}" alt="${esc(x.judul)}" loading="lazy" onerror="this.parentElement.style.opacity='0.3'">
     <span class="galeri-tag">${KATEGORI[x._kategori].nama}</span>
     <div class="galeri-info">
       <b>${esc(x.judul)}</b>
@@ -439,7 +513,7 @@ function renderGaleri() {
 }
 
 // ============================================================
-// NAVIGASI PUBLIK
+// NAVIGASI
 // ============================================================
 function showPage(page, e) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -475,22 +549,33 @@ function showDetail(k, id) {
   if (!d) return;
   const cfg = KATEGORI[k];
   let html = `<h2>${esc(d.judul)}</h2>`;
+
+  // Gambar
   if (d.gambar) {
-    html += `<img class="preview-img" src="${esc(d.gambar)}" alt="">`;
+    const imgSrc = getImageUrl(d.gambar);
+    html += `<img class="preview-img" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">`;
   }
+
+  // Fields lainnya
   cfg.fields.forEach(f => {
-    if (['judul','gambar','dokumen','sertifikat'].includes(f.key)) return;
+    if (['judul','gambar','dokumen','sertifikat','laporan'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
       const val = f.type === 'date' ? formatTanggal(d[f.key]) : esc(d[f.key]);
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
     }
   });
+
+  // Tombol Link Dokumen
+  if (d.laporan) {
+    html += `<a href="${esc(normalizeDriveUrl(d.laporan))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-lines"></i> Lihat Laporan Inovasi</a> `;
+  }
   if (d.dokumen) {
-    html += `<a href="${esc(d.dokumen)}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a>`;
+    html += `<a href="${esc(normalizeDriveUrl(d.dokumen))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a> `;
   }
   if (d.sertifikat) {
-    html += `<a href="${esc(d.sertifikat)}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
+    html += `<a href="${esc(normalizeDriveUrl(d.sertifikat))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a>`;
   }
+
   $('detailContent').innerHTML = html;
   $('detailModal').classList.add('show');
 }
@@ -538,7 +623,6 @@ function loginGuest() {
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
 
-  // Update tombol login di publik
   const btn = $('loginBtn');
   if (btn) {
     if (user) {
@@ -552,10 +636,8 @@ onAuthStateChanged(auth, async (user) => {
     }
   }
 
-  // Handle halaman admin
   if (isAdminPage()) {
     if (user) {
-      // Ambil profil user
       try {
         const profileSnap = await getDoc(doc(db, 'users', user.uid));
         if (profileSnap.exists()) {
@@ -628,6 +710,7 @@ const PAGE_TITLES = {
   berita: ['Berita', 'Kelola berita & informasi'],
   pelatihan: ['Pelatihan', 'Kelola program pelatihan'],
   database: ['Database', 'Kelola dataset & dokumen'],
+  opd: ['OPD', 'Kelola daftar OPD (untuk dropdown Inovasi)'],
   galeri: ['Galeri Foto', 'Semua gambar dari berbagai kategori'],
   users: ['Kelola Admin', 'Atur siapa saja yang bisa mengelola TODDOPULI']
 };
@@ -635,7 +718,6 @@ const PAGE_TITLES = {
 function showAdminPage(page, btn) {
   currentAdminPage = page;
 
-  // Pindah halaman
   document.querySelectorAll('.adm-page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.side-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
@@ -643,7 +725,6 @@ function showAdminPage(page, btn) {
   if (page === 'dashboard') {
     $('adm-dashboard').classList.add('active');
     updateStats();
-    // Panggil setelah DOM render
     requestAnimationFrame(() => renderDashboardCharts());
   } else if (page === 'galeri') {
     $('adm-galeri').classList.add('active');
@@ -674,7 +755,7 @@ function renderDashboardCharts() {
     return;
   }
 
-  // Chart 1: Inovasi per Tahun
+  // Chart 1: Inovasi per Tahun (Bar)
   const tahunMap = {};
   cachedData.inovasi.forEach(x => {
     if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun] || 0) + 1;
@@ -705,7 +786,7 @@ function renderDashboardCharts() {
     });
   }
 
-  // Chart 2: Inovasi per OPD
+  // Chart 2: Inovasi per OPD (Doughnut)
   const opdMap = {};
   cachedData.inovasi.forEach(x => {
     if (x.opd) opdMap[x.opd] = (opdMap[x.opd] || 0) + 1;
@@ -731,10 +812,71 @@ function renderDashboardCharts() {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { font: { size: 11 }, padding: 10 }
-          }
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
+        }
+      }
+    });
+  }
+
+  // Chart 3: Jenis Inovasi (Doughnut)
+  const jenisMap = {};
+  cachedData.inovasi.forEach(x => {
+    if (x.jenis_inovasi) jenisMap[x.jenis_inovasi] = (jenisMap[x.jenis_inovasi] || 0) + 1;
+  });
+  const jenisLabels = Object.keys(jenisMap);
+  const jenisValues = jenisLabels.map(j => jenisMap[j]);
+  const jenisColors = ['#F59E0B','#10B981','#6366F1','#EC4899','#8B5CF6'];
+
+  const ctx3 = $('chartJenis');
+  if (ctx3) {
+    if (chartJenisInstance) chartJenisInstance.destroy();
+    chartJenisInstance = new Chart(ctx3, {
+      type: 'doughnut',
+      data: {
+        labels: jenisLabels.length ? jenisLabels : ['Belum ada data'],
+        datasets: [{
+          data: jenisValues.length ? jenisValues : [1],
+          backgroundColor: jenisColors,
+          borderWidth: 2, borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
+        }
+      }
+    });
+  }
+
+  // Chart 4: Bentuk Inovasi (Pie)
+  const bentukMap = {};
+  cachedData.inovasi.forEach(x => {
+    if (x.bentuk_inovasi) bentukMap[x.bentuk_inovasi] = (bentukMap[x.bentuk_inovasi] || 0) + 1;
+  });
+  const bentukLabels = Object.keys(bentukMap);
+  const bentukValues = bentukLabels.map(b => bentukMap[b]);
+  const bentukColors = ['#0EA5E9','#F97316','#84CC16'];
+
+  const ctx4 = $('chartBentuk');
+  if (ctx4) {
+    if (chartBentukInstance) chartBentukInstance.destroy();
+    chartBentukInstance = new Chart(ctx4, {
+      type: 'pie',
+      data: {
+        labels: bentukLabels.length ? bentukLabels : ['Belum ada data'],
+        datasets: [{
+          data: bentukValues.length ? bentukValues : [1],
+          backgroundColor: bentukColors,
+          borderWidth: 2, borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
         }
       }
     });
@@ -760,7 +902,8 @@ function renderCrud() {
 
   container.innerHTML = list.length
     ? list.map(d => {
-      const img = d.gambar ? `<img class="thumb" src="${esc(d.gambar)}" alt="">` : '';
+      const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+      const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
       const badge = d.opd || d.jenis || d.kategori || d.peneliti || d.pemilik;
       const date = d.tanggal ? formatTanggal(d.tanggal) : d.tahun;
       const desc = String(d.deskripsi || '');
@@ -804,6 +947,7 @@ function openForm(id = null) {
 
   const d = id ? cachedData[k].find(x => x.id === id) : {};
   let html = '';
+
   cfg.fields.forEach(f => {
     const val = d?.[f.key] ?? '';
     const req = f.required ? 'required' : '';
@@ -811,12 +955,36 @@ function openForm(id = null) {
 
     if (f.type === 'textarea') {
       html += `<textarea id="f_${f.key}" ${req} placeholder="${f.label}...">${esc(val)}</textarea>`;
+
     } else if (f.type === 'select') {
       html += `<select id="f_${f.key}" ${req}>`;
       f.options.forEach(o => {
         html += `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`;
       });
       html += `</select>`;
+
+    } else if (f.type === 'opd_select') {
+      const opdList = (cachedData.opd || [])
+        .map(o => o.judul || o.nama)
+        .filter(Boolean)
+        .sort();
+      if (opdList.length === 0) {
+        html += `<input type="text" id="f_${f.key}" value="${esc(val)}" ${req} placeholder="Ketik nama OPD...">`;
+        html += `<small style="color:#F59E0B;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
+          <i class="fas fa-info-circle"></i> Belum ada daftar OPD. Tambahkan di menu <b>OPD</b> agar muncul sebagai dropdown.
+        </small>`;
+      } else {
+        html += `<select id="f_${f.key}" ${req}>`;
+        html += `<option value="">-- Pilih OPD --</option>`;
+        opdList.forEach(o => {
+          html += `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`;
+        });
+        if (val && !opdList.includes(val)) {
+          html += `<option value="${esc(val)}" selected>${esc(val)} (lama)</option>`;
+        }
+        html += `</select>`;
+      }
+
     } else if (f.type === 'image') {
       html += `
         <div class="upload-box" onclick="document.getElementById('file_${f.key}').click()">
@@ -825,9 +993,10 @@ function openForm(id = null) {
           <small>JPG/PNG • Maks 5MB</small>
         </div>
         <input type="file" id="file_${f.key}" accept="image/*" style="display:none" onchange="handleFilePick(this,'${f.key}','image')">
-        <div id="prev_${f.key}">${val ? `<img class="preview-img" src="${esc(val)}" alt="">` : ''}</div>
+        <div id="prev_${f.key}">${val ? `<img class="preview-img" src="${esc(getImageUrl(val))}" alt="" onerror="this.style.display='none'">` : ''}</div>
         <input type="hidden" id="f_${f.key}" value="${esc(val)}">
       `;
+
     } else if (f.type === 'file') {
       html += `
         <div class="upload-box" onclick="document.getElementById('file_${f.key}').click()">
@@ -840,14 +1009,31 @@ function openForm(id = null) {
           <div class="preview-file">
             <i class="fas fa-file-pdf"></i>
             <span>File sudah tersimpan</span>
-            <a href="${esc(val)}" target="_blank" rel="noopener" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a>
+            <a href="${esc(normalizeDriveUrl(val))}" target="_blank" rel="noopener" style="color:var(--primary);font-size:12px;font-weight:600;">Lihat</a>
           </div>` : ''}</div>
         <input type="hidden" id="f_${f.key}" value="${esc(val)}">
       `;
+
+    } else if (isUrlField(f.key)) {
+      // Field URL (link Google Drive)
+      const isImageField = f.key === 'gambar';
+      html += `<input type="url" id="f_${f.key}" value="${esc(val)}" ${req} 
+        placeholder="${isImageField ? 'https://drive.google.com/file/d/...' : 'https://drive.google.com/file/d/...'}"
+        style="font-family:monospace;font-size:12px;">`;
+      if (val) {
+        const previewUrl = isImageField ? normalizeDriveUrl(val) : normalizeDriveUrl(val);
+        html += `<small style="display:block;margin-top:-6px;margin-bottom:10px;">
+          <a href="${esc(previewUrl)}" target="_blank" rel="noopener" style="color:var(--primary);font-size:11px;font-weight:600;">
+            <i class="fas fa-external-link-alt"></i> Cek link
+          </a>
+        </small>`;
+      }
+
     } else {
       html += `<input type="${f.type}" id="f_${f.key}" value="${esc(val)}" ${req} placeholder="${f.label}...">`;
     }
   });
+
   $('formFields').innerHTML = html;
   $('formModal').classList.add('show');
 }
@@ -877,7 +1063,7 @@ function handleFilePick(input, key, kind) {
 }
 
 // ============================================================
-// UPLOAD CLOUDINARY
+// UPLOAD CLOUDINARY (untuk berita/pelatihan gambar)
 // ============================================================
 async function uploadFile(file, path, onProgress) {
   return new Promise((resolve, reject) => {
@@ -890,9 +1076,7 @@ async function uploadFile(file, path, onProgress) {
     xhr.open('POST', url, true);
 
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        onProgress?.(Math.round((e.loaded / e.total) * 100));
-      }
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
     };
 
     xhr.onload = () => {
@@ -932,7 +1116,6 @@ async function saveForm() {
   const btn = $('saveBtn');
   const data = {};
 
-  // Kumpulkan data teks
   for (const f of cfg.fields) {
     if (f.type === 'image' || f.type === 'file') continue;
     const el = $('f_' + f.key);
@@ -944,7 +1127,6 @@ async function saveForm() {
     if (v !== '') data[f.key] = v;
   }
 
-  // Ambil URL file lama (untuk edit tanpa ganti file)
   for (const f of cfg.fields) {
     if (f.type !== 'image' && f.type !== 'file') continue;
     const hidden = $('f_' + f.key);
@@ -955,7 +1137,6 @@ async function saveForm() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
-    // Upload file baru jika ada
     if (pendingUploadFile) {
       const { file, key } = pendingUploadFile;
       $('uploadProgress').style.display = 'block';
@@ -967,7 +1148,6 @@ async function saveForm() {
       data[key] = url;
     }
 
-    // Simpan ke Firestore
     if (editingId) {
       await updateDoc(doc(db, k, editingId), {
         ...data,
@@ -1064,9 +1244,17 @@ function exportPDF() {
   doc.setFontSize(9);
   doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
 
-  const fields = cfg.fields.filter(f => !['image','file'].includes(f.type)).slice(0, 6);
-  const headers = [fields.map(f => f.label)];
-  const rows = data.map(d => fields.map(f => String(d[f.key] ?? '').substring(0, 60)));
+  // Ambil field text (bukan URL, bukan gambar, bukan file)
+  const textFields = cfg.fields.filter(f =>
+    f.type !== 'image' &&
+    f.type !== 'file' &&
+    !isUrlField(f.key)
+  ).slice(0, 6);
+
+  const headers = [textFields.map(f => f.label)];
+  const rows = data.map(d =>
+    textFields.map(f => String(d[f.key] ?? '').substring(0, 60))
+  );
 
   doc.autoTable({
     head: headers,
@@ -1113,14 +1301,12 @@ async function handleImport(input) {
 
     if (!confirm(`Akan mengimpor ${rows.length} baris ke kategori ${cfg.nama}. Lanjutkan?`)) return;
 
-    // Mapping kolom: label ATAU key (case-insensitive)
     const labelToKey = {};
     cfg.fields.forEach(f => {
       labelToKey[f.label.toLowerCase().trim()] = f.key;
       labelToKey[f.key.toLowerCase().trim()] = f.key;
     });
 
-    // Set judul existing (untuk cek duplikat)
     const existingJudul = new Set(
       (cachedData[k] || []).map(x => String(x.judul || '').toLowerCase().trim())
     );
@@ -1136,7 +1322,6 @@ async function handleImport(input) {
 
       if (!docData.judul) { failed++; continue; }
 
-      // Cek duplikat
       const j = docData.judul.toLowerCase().trim();
       if (existingJudul.has(j)) { skipped++; continue; }
 
@@ -1220,17 +1405,12 @@ function closeUserForm() {
   editingUserId = null;
 }
 
-/**
- * 🔥 Buat user baru TANPA mengganggu session login utama
- * Menggunakan secondary Firebase App instance
- */
 async function createUserSecondary(email, password) {
   const SECONDARY_NAME = 'toddopuli-secondary';
   let secondaryApp;
   try {
     secondaryApp = initializeApp(firebaseConfig, SECONDARY_NAME);
   } catch (e) {
-    // Kalau sudah ada, itu ok
     console.warn('Secondary app sudah ada, lanjut...');
   }
   const secondaryAuth = getAuth(secondaryApp);
@@ -1260,14 +1440,12 @@ async function saveUser() {
 
   try {
     if (editingUserId) {
-      // Update role & nama saja
       await updateDoc(doc(db, 'users', editingUserId), {
         nama, role: r,
         updatedAt: serverTimestamp()
       });
       toast('success', 'Berhasil', 'Data admin diperbarui.');
     } else {
-      // Buat user baru via secondary app (TIDAK sign-out dari akun saat ini!)
       if (!pass || pass.length < 6) {
         return toast('error', 'Gagal', 'Password minimal 6 karakter.');
       }
@@ -1311,7 +1489,7 @@ async function hapusUser(id) {
 }
 
 // ============================================================
-// ACTIVITY LOG (localStorage — per device)
+// ACTIVITY LOG
 // ============================================================
 function saveActivity(action, kategori, judul) {
   const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
@@ -1360,6 +1538,7 @@ function globalSearch() {
   const qLower = q.toLowerCase();
   const results = [];
   Object.entries(cachedData).forEach(([k, list]) => {
+    if (k === 'opd') return;
     list.forEach(d => {
       if ((d.judul || '').toLowerCase().includes(qLower) ||
           (d.deskripsi || '').toLowerCase().includes(qLower)) {
@@ -1373,7 +1552,6 @@ function globalSearch() {
     return;
   }
 
-  // Tampilkan hasil di modal detail (lebih baik dari alert)
   let html = `<h2><i class="fas fa-search"></i> Hasil Pencarian "${esc(q)}"</h2>`;
   html += `<p style="margin-bottom:14px;color:var(--gray);font-size:13px;">Ditemukan ${results.length} hasil</p>`;
   html += results.slice(0, 20).map(r => `
@@ -1405,14 +1583,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('pubGaleriSearch')?.addEventListener('input', renderPubGaleri);
 
-  // Klik luar modal untuk close
   document.querySelectorAll('.modal').forEach(m => {
     m.addEventListener('click', e => {
       if (e.target === m) m.classList.remove('show');
     });
   });
 
-  // ESC untuk close modal
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal.show').forEach(m => m.classList.remove('show'));
@@ -1421,7 +1597,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// EXPOSE KE WINDOW (untuk onclick di HTML)
+// EXPOSE KE WINDOW
 // ============================================================
 Object.assign(window, {
   showPage, toggleMenu, openLogin, closeLogin, doLogin, loginGuest,
@@ -1430,7 +1606,8 @@ Object.assign(window, {
   hapusData, handleFilePick, exportExcel, exportPDF, triggerImport, handleImport,
   renderGaleri, renderPubGaleri, openUserForm, editUser, closeUserForm, saveUser, hapusUser,
   renderInovasi, renderRiset, renderPublikasi, renderHki,
-  renderBerita, renderPelatihan, renderDatabase, renderCrud
+  renderBerita, renderPelatihan, renderDatabase, renderCrud,
+  normalizeDriveUrl, normalizeDriveImageUrl
 });
 
 // ============================================================
