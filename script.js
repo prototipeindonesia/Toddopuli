@@ -1,9 +1,9 @@
 /* ============================================================
-   TODDOPULI v3.3 - Script Utama
+   TODDOPULI v3.4 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
-   + Filter Jenis & Bentuk Inovasi
+   + Filter Jenis & Bentuk Inovasi + ROLE ADMIN OPD
 ============================================================ */
 
 import {
@@ -156,7 +156,6 @@ function extractDriveFileId(url) {
   return null;
 }
 
-/** Untuk link dokumen/sertifikat → preview (bisa dibuka di tab baru) */
 function normalizeDriveUrl(url) {
   if (!url) return '';
   const s = String(url).trim();
@@ -167,7 +166,6 @@ function normalizeDriveUrl(url) {
   return `https://drive.google.com/file/d/${fileId}/preview`;
 }
 
-/** Untuk gambar → thumbnail (bisa dipakai di <img src>) */
 function normalizeDriveImageUrl(url) {
   if (!url) return '';
   const s = String(url).trim();
@@ -178,7 +176,6 @@ function normalizeDriveImageUrl(url) {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
 }
 
-/** Ambil URL dari gambar (baik drive maupun cloudinary) */
 function getImageUrl(url) {
   if (!url) return '';
   if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
@@ -208,6 +205,12 @@ let chartOpdInstance = null;
 let chartJenisInstance = null;
 let chartBentukInstance = null;
 let isFirstSnapshot = true;
+
+// ============================================================
+// MENU YANG DIIZINKAN UNTUK ADMIN OPD
+// ============================================================
+const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'pelatihan', 'galeri'];
+const ADMIN_OPD_STAT_CARDS = ['dashInovasi', 'dashRiset', 'dashPelatihan'];
 
 // ============================================================
 // UTIL
@@ -255,12 +258,109 @@ function toast(type, title, msg, duration = 4000) {
 }
 
 // ============================================================
-// ROLE
+// ROLE / PERMISSION HELPERS
 // ============================================================
 function role() { return currentProfile?.role || null; }
 function isSuperAdmin() { return role() === 'super_admin'; }
-function isAdminOrAbove() { return ['super_admin','admin'].includes(role()); }
-function isEditorOrAbove() { return ['super_admin','admin','editor'].includes(role()); }
+function isAdmin() { return role() === 'admin'; }
+function isAdminOpd() { return role() === 'admin_opd'; }
+function isEditor() { return role() === 'editor'; }
+
+// Siapa saja yang bisa mengakses panel admin
+function isAnyAdmin() {
+  return ['super_admin', 'admin', 'admin_opd', 'editor'].includes(role());
+}
+function isAdminOrAbove() { return ['super_admin', 'admin'].includes(role()); }
+function isEditorOrAbove() {
+  return ['super_admin', 'admin', 'admin_opd', 'editor'].includes(role());
+}
+
+// ============================================================
+// DATA FILTER UNTUK ADMIN OPD
+// ============================================================
+function filterDataForRole(kategori, list) {
+  if (!isAdminOpd()) return list;
+  if (kategori === 'inovasi') {
+    // Inovasi difilter berdasarkan OPD
+    return list.filter(d => d.opd === currentProfile?.opd);
+  }
+  if (kategori === 'riset' || kategori === 'pelatihan') {
+    // Riset & Pelatihan difilter berdasarkan siapa yang input
+    return list.filter(d => d.createdBy === currentUser?.email);
+  }
+  // Kategori lain tidak boleh diakses admin OPD
+  return [];
+}
+
+// ============================================================
+// CEK IZIN EDIT / HAPUS PER ITEM
+// ============================================================
+function canEditItem(kategori, d) {
+  if (isSuperAdmin() || isAdmin() || isEditor()) return true;
+  if (isAdminOpd()) {
+    if (kategori === 'inovasi') return d.opd === currentProfile?.opd;
+    if (kategori === 'riset' || kategori === 'pelatihan') {
+      return d.createdBy === currentUser?.email;
+    }
+    return false;
+  }
+  return false;
+}
+
+function canDeleteItem(kategori, d) {
+  if (isSuperAdmin() || isAdmin()) return true;
+  if (isAdminOpd()) {
+    if (kategori === 'inovasi') return d.opd === currentProfile?.opd;
+    if (kategori === 'riset' || kategori === 'pelatihan') {
+      return d.createdBy === currentUser?.email;
+    }
+    return false;
+  }
+  return false; // Editor tidak bisa hapus
+}
+
+// ============================================================
+// TERAPKAN ROLE KE UI (SIDEBAR & STAT CARDS)
+// ============================================================
+function applyRoleToUI() {
+  // Sembunyikan menu sidebar yang tidak diizinkan
+  document.querySelectorAll('.side-btn').forEach(btn => {
+    const onclickAttr = btn.getAttribute('onclick') || '';
+    const match = onclickAttr.match(/showAdminPage\('([^']+)'/);
+    const page = match ? match[1] : null;
+    if (!page) return;
+
+    let show = true;
+
+    if (isAdminOpd()) {
+      show = ADMIN_OPD_MENUS.includes(page);
+    } else if (isEditor()) {
+      // Editor bisa akses semua kecuali users
+      if (page === 'users') show = false;
+    } else if (isAdmin()) {
+      if (page === 'users') show = false;
+    }
+    // super_admin: semua tampil
+
+    if (page === 'users' && !isSuperAdmin()) show = false;
+
+    btn.style.display = show ? 'flex' : 'none';
+  });
+
+  // Sembunyikan stat card yang tidak diizinkan untuk admin_opd
+  document.querySelectorAll('.stat-card').forEach(card => {
+    const h3 = card.querySelector('h3');
+    const id = h3?.id || '';
+    if (isAdminOpd() && !ADMIN_OPD_STAT_CARDS.includes(id)) {
+      card.style.display = 'none';
+    } else {
+      card.style.display = '';
+    }
+  });
+
+  // Sembunyikan tombol export/import untuk admin OPD (opsional)
+  // Admin OPD tetap bisa export data mereka sendiri, jadi tetap tampil
+}
 
 // ============================================================
 // LOAD DATA
@@ -349,16 +449,30 @@ function startRealtimeListeners() {
 // ============================================================
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+
+  // Data publik (index.html) — selalu tampil semua
   set('statInovasi', cachedData.inovasi.length);
   set('statRiset', cachedData.riset.length);
   set('statHki', cachedData.hki.length);
   set('statBerita', cachedData.berita.length);
-  set('dashInovasi', cachedData.inovasi.length);
-  set('dashRiset', cachedData.riset.length);
+
+  // Dashboard admin — filter untuk admin OPD
+  let inovasiCount = cachedData.inovasi.length;
+  let risetCount = cachedData.riset.length;
+  let pelatihanCount = cachedData.pelatihan.length;
+
+  if (isAdminOpd()) {
+    inovasiCount = filterDataForRole('inovasi', cachedData.inovasi).length;
+    risetCount = filterDataForRole('riset', cachedData.riset).length;
+    pelatihanCount = filterDataForRole('pelatihan', cachedData.pelatihan).length;
+  }
+
+  set('dashInovasi', inovasiCount);
+  set('dashRiset', risetCount);
   set('dashPub', cachedData.publikasi.length);
   set('dashHki', cachedData.hki.length);
   set('dashBerita', cachedData.berita.length);
-  set('dashPelatihan', cachedData.pelatihan.length);
+  set('dashPelatihan', pelatihanCount);
   set('dashDb', cachedData.database.length);
 }
 
@@ -384,7 +498,7 @@ function buildCard(d, k, extraLabel = '') {
 }
 
 // ============================================================
-// CARD BUILDER KHUSUS INOVASI (dengan badges Jenis + Bentuk)
+// CARD BUILDER KHUSUS INOVASI
 // ============================================================
 function buildInovasiCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
@@ -419,24 +533,14 @@ function renderInovasi() {
   const bentuk = $('filterBentukInovasi')?.value || '';
 
   let d = cachedData.inovasi;
-
-  // Filter pencarian teks
-  if (q) {
-    d = d.filter(x =>
-      (x.judul||'').toLowerCase().includes(q) ||
-      (x.opd||'').toLowerCase().includes(q) ||
-      (x.nama_inovator||'').toLowerCase().includes(q) ||
-      (x.deskripsi||'').toLowerCase().includes(q)
-    );
-  }
-
-  // Filter tahun
+  if (q) d = d.filter(x =>
+    (x.judul||'').toLowerCase().includes(q) ||
+    (x.opd||'').toLowerCase().includes(q) ||
+    (x.nama_inovator||'').toLowerCase().includes(q) ||
+    (x.deskripsi||'').toLowerCase().includes(q)
+  );
   if (th) d = d.filter(x => String(x.tahun) === String(th));
-
-  // Filter jenis inovasi
   if (jenis) d = d.filter(x => x.jenis_inovasi === jenis);
-
-  // Filter bentuk inovasi
   if (bentuk) d = d.filter(x => x.bentuk_inovasi === bentuk);
 
   $('listInovasi').innerHTML = d.length
@@ -509,7 +613,12 @@ function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
   ['inovasi','berita','pelatihan'].forEach(k => {
     if (filterKategori && filterKategori !== k) return;
-    cachedData[k].forEach(d => {
+    let list = cachedData[k];
+    // Admin OPD: galeri hanya menampilkan gambar dari data mereka
+    if (isAdminOpd()) {
+      list = filterDataForRole(k, list);
+    }
+    list.forEach(d => {
       if (d.gambar) items.push({ ...d, _kategori: k });
     });
   });
@@ -592,13 +701,11 @@ function showDetail(k, id) {
   const cfg = KATEGORI[k];
   let html = `<h2>${esc(d.judul)}</h2>`;
 
-  // Gambar
   if (d.gambar) {
     const imgSrc = getImageUrl(d.gambar);
     html += `<img class="preview-img" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">`;
   }
 
-  // Info badges (khusus inovasi)
   if (k === 'inovasi') {
     let badges = '';
     if (d.opd) badges += `<span class="badge">${esc(d.opd)}</span> `;
@@ -608,7 +715,6 @@ function showDetail(k, id) {
     if (badges) html += `<div class="badge-row" style="margin-bottom:14px;">${badges}</div>`;
   }
 
-  // Fields lainnya
   cfg.fields.forEach(f => {
     if (['judul','gambar','dokumen','sertifikat','laporan'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
@@ -617,7 +723,6 @@ function showDetail(k, id) {
     }
   });
 
-  // Tombol Link Dokumen
   if (d.laporan) {
     html += `<a href="${esc(normalizeDriveUrl(d.laporan))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-lines"></i> Lihat Laporan Inovasi</a> `;
   }
@@ -703,13 +808,23 @@ onAuthStateChanged(auth, async (user) => {
         currentProfile = { role: 'viewer', email: user.email };
       }
 
-      if (!isEditorOrAbove()) {
+      if (!isAnyAdmin()) {
         toast('error', 'Akses Terbatas', 'Anda tidak punya izin mengelola data.');
       }
 
       $('authScreen').style.display = 'none';
       $('adminApp').style.display = 'block';
-      $('userEmail').textContent = `${currentProfile.nama || user.email} (${role() || 'viewer'})`;
+
+      // Tampilkan nama + role + OPD (kalau admin OPD)
+      let label = `${currentProfile.nama || user.email} (${role() || 'viewer'})`;
+      if (isAdminOpd() && currentProfile.opd) {
+        label = `${currentProfile.nama || user.email} (Admin OPD: ${currentProfile.opd})`;
+      }
+      $('userEmail').textContent = label;
+
+      // Terapkan role ke UI (sembunyikan menu)
+      applyRoleToUI();
+
       initAdmin();
     } else {
       $('authScreen').style.display = 'flex';
@@ -750,7 +865,13 @@ async function initAdmin() {
   updateStats();
   renderActivity();
   startRealtimeListeners();
-  showAdminPage('dashboard');
+
+  // Set halaman awal yang valid untuk role ini
+  let startPage = 'dashboard';
+  if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(startPage)) {
+    startPage = ADMIN_OPD_MENUS[0];
+  }
+  showAdminPage(startPage);
 }
 
 const PAGE_TITLES = {
@@ -768,6 +889,16 @@ const PAGE_TITLES = {
 };
 
 function showAdminPage(page, btn) {
+  // Cek apakah role diizinkan mengakses halaman ini
+  if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(page)) {
+    toast('error', 'Akses Ditolak', 'Anda tidak punya akses ke menu ini.');
+    return;
+  }
+  if (page === 'users' && !isSuperAdmin()) {
+    toast('error', 'Akses Ditolak', 'Hanya Super Admin yang dapat mengelola admin.');
+    return;
+  }
+
   currentAdminPage = page;
 
   document.querySelectorAll('.adm-page').forEach(p => p.classList.remove('active'));
@@ -807,9 +938,15 @@ function renderDashboardCharts() {
     return;
   }
 
+  // Data yang dipakai untuk chart (filter untuk admin OPD)
+  let inovasiData = cachedData.inovasi;
+  if (isAdminOpd()) {
+    inovasiData = filterDataForRole('inovasi', inovasiData);
+  }
+
   // Chart 1: Inovasi per Tahun (Bar)
   const tahunMap = {};
-  cachedData.inovasi.forEach(x => {
+  inovasiData.forEach(x => {
     if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun] || 0) + 1;
   });
   const tahunLabels = Object.keys(tahunMap).sort();
@@ -840,7 +977,7 @@ function renderDashboardCharts() {
 
   // Chart 2: Inovasi per OPD (Doughnut)
   const opdMap = {};
-  cachedData.inovasi.forEach(x => {
+  inovasiData.forEach(x => {
     if (x.opd) opdMap[x.opd] = (opdMap[x.opd] || 0) + 1;
   });
   const opdLabels = Object.keys(opdMap).slice(0, 8);
@@ -870,9 +1007,9 @@ function renderDashboardCharts() {
     });
   }
 
-  // Chart 3: Jenis Inovasi (Doughnut)
+  // Chart 3: Jenis Inovasi
   const jenisMap = {};
-  cachedData.inovasi.forEach(x => {
+  inovasiData.forEach(x => {
     if (x.jenis_inovasi) jenisMap[x.jenis_inovasi] = (jenisMap[x.jenis_inovasi] || 0) + 1;
   });
   const jenisLabels = Object.keys(jenisMap);
@@ -902,9 +1039,9 @@ function renderDashboardCharts() {
     });
   }
 
-  // Chart 4: Bentuk Inovasi (Pie)
+  // Chart 4: Bentuk Inovasi
   const bentukMap = {};
-  cachedData.inovasi.forEach(x => {
+  inovasiData.forEach(x => {
     if (x.bentuk_inovasi) bentukMap[x.bentuk_inovasi] = (bentukMap[x.bentuk_inovasi] || 0) + 1;
   });
   const bentukLabels = Object.keys(bentukMap);
@@ -946,11 +1083,12 @@ function renderCrud() {
   if (!container) return;
 
   const q = ($('crudSearch')?.value || '').toLowerCase();
-  let list = cachedData[k] || [];
-  if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
 
-  const canDelete = isAdminOrAbove();
-  const canEdit = isEditorOrAbove();
+  // Filter data berdasarkan role
+  let list = cachedData[k] || [];
+  list = filterDataForRole(k, list);
+
+  if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
 
   container.innerHTML = list.length
     ? list.map(d => {
@@ -960,23 +1098,39 @@ function renderCrud() {
       const date = d.tanggal ? formatTanggal(d.tanggal) : d.tahun;
       const desc = String(d.deskripsi || '');
       const descCut = desc.length > 100 ? desc.substring(0, 100) + '...' : desc;
+
+      const editable = canEditItem(k, d);
+      const deletable = canDeleteItem(k, d);
+
+      // Info pemilik untuk admin OPD
+      const ownerInfo = (isAdminOpd() && d.createdBy)
+        ? `<div class="meta" style="font-size:10px;color:#94A3B8;margin-top:4px;">
+             <i class="fas fa-user"></i> ${esc(d.createdBy)}
+           </div>`
+        : '';
+
       return `<div class="crud-item">
         ${img}
         <h4>${esc(d.judul)}</h4>
         <p>${esc(descCut)}</p>
         ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
         ${date ? `<div class="meta" style="font-size:11px;color:#94A3B8;margin-top:6px;"><i class="fas fa-calendar"></i> ${esc(date)}</div>` : ''}
+        ${ownerInfo}
         <div class="crud-actions">
-          <button class="btn-edit" onclick="openForm('${d.id}')" ${canEdit ? '' : 'disabled'}>
+          <button class="btn-edit" onclick="openForm('${d.id}')" ${editable ? '' : 'disabled title="Bukan data Anda"'}>
             <i class="fas fa-pen"></i> Edit
           </button>
-          <button class="btn-del" onclick="hapusData('${d.id}')" ${canDelete ? '' : 'disabled'}>
+          <button class="btn-del" onclick="hapusData('${d.id}')" ${deletable ? '' : 'disabled title="Bukan data Anda"'}>
             <i class="fas fa-trash"></i> Hapus
           </button>
         </div>
       </div>`;
     }).join('')
-    : emptyMsg('Belum ada data.');
+    : emptyMsg(
+      isAdminOpd()
+        ? `Belum ada data ${KATEGORI[k].nama} untuk ${currentProfile?.opd || 'OPD Anda'}.`
+        : 'Belum ada data.'
+    );
 }
 
 // ============================================================
@@ -990,6 +1144,16 @@ function openForm(id = null) {
     return;
   }
 
+  // Kalau edit, pastikan item ada dan bisa diedit
+  if (id) {
+    const existing = cachedData[k]?.find(x => x.id === id);
+    if (!existing) return;
+    if (!canEditItem(k, existing)) {
+      toast('error', 'Akses Ditolak', 'Anda hanya dapat mengedit data milik OPD Anda.');
+      return;
+    }
+  }
+
   editingKategori = k;
   editingId = id;
   pendingUploadFile = null;
@@ -1001,8 +1165,9 @@ function openForm(id = null) {
   let html = '';
 
   cfg.fields.forEach(f => {
-    const val = d?.[f.key] ?? '';
+    let val = d?.[f.key] ?? '';
     const req = f.required ? 'required' : '';
+
     html += `<label>${f.label}${f.required ? ' <span style="color:#DC2626">*</span>' : ''}</label>`;
 
     if (f.type === 'textarea') {
@@ -1016,25 +1181,36 @@ function openForm(id = null) {
       html += `</select>`;
 
     } else if (f.type === 'opd_select') {
-      const opdList = (cachedData.opd || [])
-        .map(o => o.judul || o.nama)
-        .filter(Boolean)
-        .sort();
-      if (opdList.length === 0) {
-        html += `<input type="text" id="f_${f.key}" value="${esc(val)}" ${req} placeholder="Ketik nama OPD...">`;
-        html += `<small style="color:#F59E0B;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
-          <i class="fas fa-info-circle"></i> Belum ada daftar OPD. Tambahkan di menu <b>OPD</b> agar muncul sebagai dropdown.
+      // KHUSUS ADMIN OPD: OPD otomatis dari profil & terkunci
+      if (isAdminOpd()) {
+        val = currentProfile?.opd || '';
+        html += `<input type="text" id="f_${f.key}" value="${esc(val)}" readonly
+          style="background:#E2E8F0;cursor:not-allowed;font-weight:600;color:#1E3A8A;">`;
+        html += `<small style="color:#1E40AF;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
+          <i class="fas fa-lock"></i> OPD terkunci: <b>${esc(val || '-')}</b>
         </small>`;
       } else {
-        html += `<select id="f_${f.key}" ${req}>`;
-        html += `<option value="">-- Pilih OPD --</option>`;
-        opdList.forEach(o => {
-          html += `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`;
-        });
-        if (val && !opdList.includes(val)) {
-          html += `<option value="${esc(val)}" selected>${esc(val)} (lama)</option>`;
+        // Admin/Editor/Super Admin: dropdown biasa
+        const opdList = (cachedData.opd || [])
+          .map(o => o.judul || o.nama)
+          .filter(Boolean)
+          .sort();
+        if (opdList.length === 0) {
+          html += `<input type="text" id="f_${f.key}" value="${esc(val)}" ${req} placeholder="Ketik nama OPD...">`;
+          html += `<small style="color:#F59E0B;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
+            <i class="fas fa-info-circle"></i> Belum ada daftar OPD. Tambahkan di menu <b>OPD</b> agar muncul sebagai dropdown.
+          </small>`;
+        } else {
+          html += `<select id="f_${f.key}" ${req}>`;
+          html += `<option value="">-- Pilih OPD --</option>`;
+          opdList.forEach(o => {
+            html += `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`;
+          });
+          if (val && !opdList.includes(val)) {
+            html += `<option value="${esc(val)}" selected>${esc(val)} (lama)</option>`;
+          }
+          html += `</select>`;
         }
-        html += `</select>`;
       }
 
     } else if (f.type === 'image') {
@@ -1067,7 +1243,6 @@ function openForm(id = null) {
       `;
 
     } else if (isUrlField(f.key)) {
-      // Field URL (link Google Drive)
       const isImageField = f.key === 'gambar';
       const placeholder = isImageField
         ? 'https://drive.google.com/file/d/... (link gambar)'
@@ -1076,7 +1251,6 @@ function openForm(id = null) {
         placeholder="${placeholder}"
         style="font-family:monospace;font-size:12px;">`;
       if (val) {
-        // Untuk gambar: preview URL thumbnail; untuk dokumen: preview URL
         const checkUrl = isImageField ? getImageUrl(val) : normalizeDriveUrl(val);
         html += `<small style="display:block;margin-top:-6px;margin-bottom:10px;">
           <a href="${esc(checkUrl)}" target="_blank" rel="noopener" style="color:var(--primary);font-size:11px;font-weight:600;">
@@ -1119,7 +1293,7 @@ function handleFilePick(input, key, kind) {
 }
 
 // ============================================================
-// UPLOAD CLOUDINARY (untuk berita/pelatihan gambar)
+// UPLOAD CLOUDINARY
 // ============================================================
 async function uploadFile(file, path, onProgress) {
   return new Promise((resolve, reject) => {
@@ -1172,6 +1346,7 @@ async function saveForm() {
   const btn = $('saveBtn');
   const data = {};
 
+  // Validasi & kumpulkan data teks
   for (const f of cfg.fields) {
     if (f.type === 'image' || f.type === 'file') continue;
     const el = $('f_' + f.key);
@@ -1183,10 +1358,23 @@ async function saveForm() {
     if (v !== '') data[f.key] = v;
   }
 
+  // Ambil URL file lama (untuk edit tanpa ganti file)
   for (const f of cfg.fields) {
     if (f.type !== 'image' && f.type !== 'file') continue;
     const hidden = $('f_' + f.key);
     if (hidden && hidden.value) data[f.key] = hidden.value;
+  }
+
+  // KHUSUS ADMIN OPD: paksa OPD mereka untuk inovasi
+  if (isAdminOpd() && k === 'inovasi') {
+    data.opd = currentProfile?.opd || data.opd;
+  }
+
+  // Untuk riset & pelatihan admin OPD: pastikan createdBy terisi
+  if (isAdminOpd() && (k === 'riset' || k === 'pelatihan')) {
+    if (!editingId) {
+      data.createdBy = currentUser?.email;
+    }
   }
 
   try {
@@ -1205,6 +1393,12 @@ async function saveForm() {
     }
 
     if (editingId) {
+      // Cek ulang izin edit
+      const existing = cachedData[k].find(x => x.id === editingId);
+      if (!canEditItem(k, existing)) {
+        throw new Error('Anda tidak dapat mengedit data ini.');
+      }
+
       await updateDoc(doc(db, k, editingId), {
         ...data,
         updatedAt: serverTimestamp(),
@@ -1234,13 +1428,17 @@ async function saveForm() {
 
 async function hapusData(id) {
   const k = currentAdminPage;
-  if (!isAdminOrAbove()) {
-    toast('error', 'Akses Ditolak', 'Hanya Admin yang bisa menghapus.');
+
+  const item = cachedData[k]?.find(x => x.id === id);
+  if (!item) return;
+
+  if (!canDeleteItem(k, item)) {
+    toast('error', 'Akses Ditolak', 'Anda hanya dapat menghapus data milik OPD Anda.');
     return;
   }
+
   if (!confirm('Yakin hapus data ini?')) return;
   try {
-    const item = cachedData[k].find(x => x.id === id);
     await deleteDoc(doc(db, k, id));
     saveActivity('hapus', k, item?.judul || '');
     toast('success', 'Terhapus', 'Data berhasil dihapus.');
@@ -1255,7 +1453,9 @@ async function hapusData(id) {
 function exportExcel() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
-  const data = cachedData[k] || [];
+  let data = cachedData[k] || [];
+  // Filter data untuk admin OPD
+  data = filterDataForRole(k, data);
   if (!data.length) {
     return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
   }
@@ -1282,7 +1482,8 @@ function exportExcel() {
 function exportPDF() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
-  const data = cachedData[k] || [];
+  let data = cachedData[k] || [];
+  data = filterDataForRole(k, data);
   if (!data.length) {
     return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
   }
@@ -1296,7 +1497,7 @@ function exportPDF() {
   doc.text('TODDOPULI - Bapperida Kota Palopo', 14, 15);
   doc.setFontSize(11);
   doc.setFont(undefined, 'normal');
-  doc.text(`Daftar ${cfg.nama}`, 14, 22);
+  doc.text(`Daftar ${cfg.nama}${isAdminOpd() ? ' - ' + currentProfile?.opd : ''}`, 14, 22);
   doc.setFontSize(9);
   doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
 
@@ -1362,8 +1563,10 @@ async function handleImport(input) {
       labelToKey[f.key.toLowerCase().trim()] = f.key;
     });
 
+    // Set judul existing (untuk cek duplikat) — hanya untuk data yang visible ke user
+    const visibleList = filterDataForRole(k, cachedData[k] || []);
     const existingJudul = new Set(
-      (cachedData[k] || []).map(x => String(x.judul || '').toLowerCase().trim())
+      visibleList.map(x => String(x.judul || '').toLowerCase().trim())
     );
 
     let success = 0, skipped = 0, failed = 0;
@@ -1380,10 +1583,16 @@ async function handleImport(input) {
       const j = docData.judul.toLowerCase().trim();
       if (existingJudul.has(j)) { skipped++; continue; }
 
+      // KHUSUS ADMIN OPD: paksa OPD
+      if (isAdminOpd() && k === 'inovasi') {
+        docData.opd = currentProfile?.opd || docData.opd;
+      }
+
       try {
         await addDoc(collection(db, k), {
           ...docData,
           createdAt: serverTimestamp(),
+          createdBy: currentUser?.email,
           importedBy: currentUser?.email
         });
         existingJudul.add(j);
@@ -1414,20 +1623,76 @@ function renderUsers() {
   if (!container) return;
 
   container.innerHTML = cachedUsers.length
-    ? cachedUsers.map(u => `
-      <div class="crud-item">
-        <h4><i class="fas fa-user-shield"></i> ${esc(u.nama || u.email)}</h4>
+    ? cachedUsers.map(u => {
+      const isMe = u.id === currentUser?.uid;
+      const roleClass = `role-${u.role}`;
+      const roleLabel = (u.role || '').replace('_',' ');
+      const opdBadge = u.opd
+        ? `<span class="badge" style="background:#DBEAFE;color:#1E40AF;margin-left:6px;">
+             <i class="fas fa-building"></i> ${esc(u.opd)}
+           </span>`
+        : '';
+      return `<div class="crud-item">
+        <h4><i class="fas fa-user-shield"></i> ${esc(u.nama || u.email)} ${isMe ? ' <span style="color:#059669;font-size:11px;">(Anda)</span>' : ''}</h4>
         <p>${esc(u.email)}</p>
-        <span class="role-badge role-${esc(u.role)}">${esc((u.role || '').replace('_',' '))}</span>
+        <span class="role-badge ${roleClass}">${esc(roleLabel)}</span>
+        ${opdBadge}
         <div class="crud-actions">
           <button class="btn-edit" onclick="editUser('${u.id}')"><i class="fas fa-pen"></i> Edit</button>
-          <button class="btn-del" onclick="hapusUser('${u.id}')" ${u.id === currentUser?.uid ? 'disabled' : ''}>
+          <button class="btn-del" onclick="hapusUser('${u.id}')" ${isMe ? 'disabled' : ''}>
             <i class="fas fa-trash"></i> Hapus
           </button>
         </div>
-      </div>
-    `).join('')
+      </div>`;
+    }).join('')
     : emptyMsg('Belum ada admin terdaftar.');
+}
+
+// ============================================================
+// INJECT OPD FIELD KE USER MODAL
+// ============================================================
+function injectOpdFieldToUserForm() {
+  if ($('u_opd_wrapper')) return; // sudah ada, skip
+
+  const roleSelect = $('u_role');
+  if (!roleSelect) return;
+
+  // Buat wrapper
+  const wrapper = document.createElement('div');
+  wrapper.id = 'u_opd_wrapper';
+  wrapper.style.display = 'none';
+  wrapper.innerHTML = `
+    <label>OPD (untuk Admin OPD)</label>
+    <select id="u_opd">
+      <option value="">-- Pilih OPD --</option>
+    </select>
+  `;
+
+  // Sisipkan setelah role select
+  roleSelect.parentNode.insertBefore(wrapper, roleSelect.nextSibling);
+
+  // Populate OPD options
+  const opdOptions = (cachedData.opd || [])
+    .map(o => o.judul || o.nama)
+    .filter(Boolean)
+    .sort();
+  const sel = $('u_opd');
+  opdOptions.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o;
+    opt.textContent = o;
+    sel.appendChild(opt);
+  });
+
+  // Toggle saat role berubah
+  roleSelect.addEventListener('change', toggleUserOpdField);
+}
+
+function toggleUserOpdField() {
+  const wrapper = $('u_opd_wrapper');
+  if (!wrapper) return;
+  const r = $('u_role')?.value;
+  wrapper.style.display = r === 'admin_opd' ? 'block' : 'none';
 }
 
 function openUserForm() {
@@ -1439,6 +1704,10 @@ function openUserForm() {
   $('u_pass').value = '';
   $('u_email').disabled = false;
   $('u_pass').parentElement.style.display = 'block';
+
+  injectOpdFieldToUserForm();
+  toggleUserOpdField();
+
   $('userModal').classList.add('show');
 }
 
@@ -1452,6 +1721,11 @@ function editUser(id) {
   $('u_role').value = u.role || 'admin';
   $('u_email').disabled = true;
   $('u_pass').parentElement.style.display = 'none';
+
+  injectOpdFieldToUserForm();
+  if ($('u_opd')) $('u_opd').value = u.opd || '';
+  toggleUserOpdField();
+
   $('userModal').classList.add('show');
 }
 
@@ -1490,13 +1764,22 @@ async function saveUser() {
   const nama = $('u_nama').value.trim();
   const r = $('u_role').value;
   const pass = $('u_pass').value.trim();
+  const opd = $('u_opd')?.value.trim() || '';
 
   if (!email) return toast('error', 'Gagal', 'Email wajib diisi.');
+
+  // Validasi khusus admin_opd
+  if (r === 'admin_opd' && !opd) {
+    return toast('error', 'Gagal', 'Pilih OPD untuk Admin OPD.');
+  }
+
+  const userData = { nama, role: r };
+  if (r === 'admin_opd') userData.opd = opd;
 
   try {
     if (editingUserId) {
       await updateDoc(doc(db, 'users', editingUserId), {
-        nama, role: r,
+        ...userData,
         updatedAt: serverTimestamp()
       });
       toast('success', 'Berhasil', 'Data admin diperbarui.');
@@ -1507,8 +1790,7 @@ async function saveUser() {
       const uid = await createUserSecondary(email, pass);
       await setDoc(doc(db, 'users', uid), {
         email,
-        nama: nama || email,
-        role: r,
+        ...userData,
         createdAt: serverTimestamp(),
         createdBy: currentUser?.email
       });
