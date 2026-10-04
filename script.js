@@ -1,9 +1,10 @@
 /* ============================================================
-   TODDOPULI v4.0 - Script Utama
+   TODDOPULI v4.1 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
    + PELATIHAN NEW + MASYARAKAT UMUM + PENDAFTARAN + REQUEST AKSES
+   + HKI Card Polished + Error Handling Improved
 ============================================================ */
 
 import {
@@ -11,11 +12,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, setDoc, serverTimestamp, onSnapshot, query, where
+  getDocs, getDoc, setDoc, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
-  createUserWithEmailAndPassword, sendPasswordResetEmail
+  createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ============================================================
@@ -34,7 +35,8 @@ const firebaseConfig = {
 const CLOUDINARY_CLOUD = "vsuyvv7v";
 const CLOUDINARY_PRESET = "toddopuli_unsigned";
 
-const ADMIN_WA = "6281234567890"; // ⚠️ GANTI dengan nomor WA admin TODDOPULI
+// ⚠️ GANTI dengan nomor WA admin TODDOPULI Anda
+const ADMIN_WA = "6281234567890";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -90,11 +92,11 @@ const KATEGORI = {
     fields: [
       { key:'judul', label:'Judul Karya / Ciptaan', type:'text', required:true },
       { key:'pemilik', label:'Nama Pemilik / Pemohon', type:'text', required:true },
-      { key:'email_pemilik', label:'Email Pemilik (untuk akses download)', type:'text' },
-      { key:'no_wa_pemohon', label:'Nomor WhatsApp Pemohon', type:'text' },
+      { key:'email_pemilik', label:'Email Pemilik (untuk akses download)', type:'text', required:true },
+      { key:'no_wa_pemohon', label:'Nomor WhatsApp Pemohon', type:'text', required:true },
       { key:'alamat_pemohon', label:'Alamat Pemohon', type:'text' },
       { key:'jenis', label:'Jenis HKI', type:'select',
-        options:['Hak Cipta','Merek','Paten','Desain Industri'] },
+        options:['Hak Cipta','Merek','Paten','Desain Industri'], required:true },
       { key:'nomor', label:'Nomor Pendaftaran (isi jika sudah resmi)', type:'text' },
       { key:'tahun', label:'Tahun', type:'text' },
       { key:'status_proses', label:'Status Proses', type:'select',
@@ -160,12 +162,12 @@ const KATEGORI = {
 // KONFIG KHUSUS
 // ============================================================
 const APPROVAL_KATEGORI = ['inovasi', 'riset', 'hki'];
-const CREATOR_ONLY_CREATE = ['pelatihan']; // hanya admin/super_admin
-const PUBLIC_READ_APPROVED = ['inovasi', 'riset', 'hki'];
+const CREATOR_ONLY_CREATE = ['pelatihan'];
 
 function needsApproval(k) { return APPROVAL_KATEGORI.includes(k); }
 function creatorOnly(k) { return CREATOR_ONLY_CREATE.includes(k); }
 function getApprovalStatus(d) { return d?.approval_status || 'approved'; }
+function isUrlField(key) { return ['gambar','dokumen','sertifikat','laporan','link_file'].includes(key); }
 
 // ============================================================
 // STATE GLOBAL
@@ -183,15 +185,12 @@ let editingId = null;
 let editingKategori = null;
 let editingUserId = null;
 let editingEdukasiId = null;
-let editingRequestId = null;
-let editingRegistrationId = null;
 let pendingUploadFile = null;
 let unsubscribers = [];
 let chartTahunInstance = null;
 let chartOpdInstance = null;
 let chartJenisInstance = null;
 let chartBentukInstance = null;
-let chartHkiStatusInstance = null;
 let isFirstSnapshot = true;
 
 // ============================================================
@@ -267,17 +266,16 @@ function isEditorOrAbove() {
 function canApprove() { return isSuperAdmin() || isAdmin(); }
 
 // ============================================================
-// FILTER DATA PER ROLE
+// FILTER DATA
 // ============================================================
 function filterDataForRole(kategori, list) {
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return list.filter(d => d.opd === currentProfile?.opd);
     if (['riset', 'pelatihan', 'hki'].includes(kategori)) return list.filter(d => d.createdBy === currentUser?.email);
-    if (kategori === 'hki_edukasi') return list; // semua bisa lihat
+    if (kategori === 'hki_edukasi') return list;
     return [];
   }
   if (isMasyarakat()) {
-    // Masyarakat lihat data mereka sendiri
     if (['inovasi', 'riset', 'hki'].includes(kategori)) return list.filter(d => d.createdBy === currentUser?.email);
     if (kategori === 'pelatihan' || kategori === 'hki_edukasi') return list;
     return [];
@@ -397,22 +395,19 @@ function startRealtimeListeners() {
       } else {
         const fn = {
           inovasi: renderInovasi, riset: renderRiset, publikasi: renderPublikasi,
-          hki: renderHki, berita: renderBerita, pelatihan: renderPelatihan,
+          hki: () => { renderHki(); renderHkiWidget(); },
+          berita: renderBerita, pelatihan: () => { renderPelatihan(); renderWidgetPelatihan(); },
           database: renderDatabase
         }[k];
         if (fn) fn();
         if (['inovasi','berita','pelatihan'].includes(k)) renderPubGaleri();
-        if (k === 'hki') renderHkiWidget();
-        if (k === 'pelatihan') { renderWidgetPelatihan(); renderPelatihan(); }
         if (k === 'berita') renderWidgetBerita();
-        if (k === 'hki_edukasi') renderHkiEdukasi();
         updateStats();
       }
     }, (err) => console.warn('Realtime err:', k, err));
     unsubscribers.push(unsub);
   });
 
-  // HKI Edukasi & Requests
   ['hki_edukasi', 'hki_requests', 'registrations'].forEach(k => {
     const unsub = onSnapshot(collection(db, k), (snap) => {
       cachedData[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -475,7 +470,7 @@ function emptyMsg(text = 'Belum ada data.') {
 }
 
 // ============================================================
-// APPROVAL BADGE
+// BADGES
 // ============================================================
 function approvalBadge(d) {
   const s = getApprovalStatus(d);
@@ -544,6 +539,24 @@ function buildPelatihanCard(d) {
   </div>`;
 }
 
+/** Card khusus HKI — dengan status proses & info pemilik */
+function buildHkiCard(d) {
+  const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+  const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+  const desc = String(d.deskripsi || '');
+  const descCut = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
+  const pemilik = d.pemilik ? `<div class="meta"><i class="fas fa-user"></i> ${esc(d.pemilik)}</div>` : '';
+  const jenis = d.jenis ? `<span class="badge badge-jenis">${esc(d.jenis)}</span>` : '';
+  const nomor = d.nomor ? `<span class="badge">No. ${esc(d.nomor)}</span>` : '';
+  const statusBadge = `<div style="margin-top:8px;">${hkiStatusBadge(d)}</div>`;
+  return `<div class="item item-hki" onclick="showDetail('hki','${d.id}')">
+    ${img}<h4>${esc(d.judul)}</h4><p>${esc(descCut)}</p>
+    <div class="badge-row">${nomor}${jenis}</div>
+    ${pemilik}
+    ${statusBadge}
+  </div>`;
+}
+
 // ============================================================
 // RENDER PUBLIK
 // ============================================================
@@ -589,14 +602,22 @@ function renderPublikasi() {
     : emptyMsg('Belum ada publikasi.');
 }
 
+/** Render HKI — sort terbaru, filter status bukan Ditolak */
 function renderHki() {
   if (!$('listHki')) return;
   const q = ($('searchHki')?.value || '').toLowerCase();
   let d = filterForPublic('hki', cachedData.hki);
-  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  // Sembunyikan HKI yang ditolak dari publik (opsional)
+  d = d.filter(x => (x.status_proses || 'Diajukan') !== 'Ditolak');
+  // Sort terbaru di atas
+  d = [...d].sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  if (q) d = d.filter(x =>
+    (x.judul||'').toLowerCase().includes(q) ||
+    (x.pemilik||'').toLowerCase().includes(q) ||
+    (x.nomor||'').toLowerCase().includes(q));
   $('listHki').innerHTML = d.length
-    ? d.map(x => buildCard(x, 'hki', `${x.jenis} • ${x.tahun}`)).join('')
-    : emptyMsg('Belum ada data HKI.');
+    ? d.map(buildHkiCard).join('')
+    : emptyMsg('Belum ada data HKI terdaftar.');
 }
 
 function renderBerita() {
@@ -628,25 +649,28 @@ function renderDatabase() {
 }
 
 // ============================================================
-// HKI EDUKASI (PUBLIK)
+// HKI EDUKASI
 // ============================================================
 function renderHkiEdukasi() {
   const container = $('hkiEdukasiList');
   if (!container) return;
   const d = cachedData.hki_edukasi || [];
   if (!d.length) {
-    container.innerHTML = emptyMsg('Belum ada konten edukasi HKI.');
+    container.innerHTML = `<div class="widget-empty"><i class="fas fa-graduation-cap"></i>Belum ada konten edukasi HKI.</div>`;
     return;
   }
   container.innerHTML = d.map(x => {
     const imgSrc = x.gambar ? getImageUrl(x.gambar) : '';
-    const thumb = imgSrc
-      ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">`
-      : `<div class="edu-thumb-placeholder"><i class="fas fa-${x.tipe === 'Video' ? 'video' : 'newspaper'}"></i></div>`;
-    const tipe = `<span class="badge ${x.tipe === 'Video' ? 'badge-jenis' : 'badge-bentuk'}">${esc(x.tipe)}</span>`;
-    const penulis = x.penulis ? `<div class="meta"><i class="fas fa-user-pen"></i> ${esc(x.penulis)}</div>` : '';
-    return `<div class="item item-edukasi" onclick="showEdukasiDetail('${x.id}')">
-      ${thumb}<h4>${esc(x.judul)}</h4>${tipe}${penulis}
+    const imgHtml = imgSrc
+      ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-graduation-cap&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
+      : `<div class="widget-item-img placeholder"><i class="fas fa-${x.tipe === 'Video' ? 'video' : 'newspaper'}"></i></div>`;
+    return `<div class="widget-item" onclick="showEdukasiDetail('${x.id}')">
+      ${imgHtml}
+      <div class="widget-item-body">
+        <h4>${esc(x.judul)}</h4>
+        <p>${esc(x.penulis || x.tipe || '')}</p>
+        <span class="widget-item-date"><i class="fas fa-${x.tipe === 'Video' ? 'video' : 'newspaper'}"></i> ${esc(x.tipe)}</span>
+      </div>
     </div>`;
   }).join('');
 }
@@ -671,19 +695,20 @@ function showEdukasiDetail(id) {
 }
 
 // ============================================================
-// HKI WIDGET (TOMBOL AJUKAN + LIST TERBARU)
+// HKI WIDGET
 // ============================================================
 function renderHkiWidget() {
   const container = $('hkiWidgetList');
   if (!container) return;
-  const list = filterForPublic('hki', cachedData.hki)
-    .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0))
-    .slice(0, 4);
-  if (!list.length) {
+  let list = filterForPublic('hki', cachedData.hki)
+    .filter(x => (x.status_proses || 'Diajukan') !== 'Ditolak');
+  list = [...list].sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  const items = list.slice(0, 4);
+  if (!items.length) {
     container.innerHTML = `<div class="widget-empty"><i class="fas fa-certificate"></i>Belum ada HKI terdaftar.</div>`;
     return;
   }
-  container.innerHTML = list.map(d => {
+  container.innerHTML = items.map(d => {
     const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
     const imgHtml = imgSrc
       ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-certificate&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
@@ -760,12 +785,12 @@ function showDetail(k, id) {
   if (d.dokumen) html += `<a href="${esc(normalizeDriveUrl(d.dokumen))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-pdf"></i> Lihat Dokumen</a> `;
   if (d.sertifikat) html += `<a href="${esc(normalizeDriveUrl(d.sertifikat))}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;"><i class="fas fa-file-certificate"></i> Lihat Sertifikat</a> `;
 
-  // HKI khusus: tombol Ikuti Pelatihan untuk pelatihan
+  // Pelatihan: tombol Ikuti
   if (k === 'pelatihan' && d.link_pelatihan) {
     html += `<a href="${esc(d.link_pelatihan)}" target="_blank" rel="noopener" class="btn-ikuti" style="margin-top:12px;display:inline-block;text-decoration:none;"><i class="fas fa-external-link-alt"></i> Ikuti Pelatihan</a>`;
   }
 
-  // HKI khusus: tombol Download
+  // HKI: tombol download / request
   if (k === 'hki' && d.link_file) {
     const isOwner = d.email_pemilik && currentUser?.email === d.email_pemilik;
     if (isOwner) {
@@ -781,7 +806,7 @@ function showDetail(k, id) {
 function closeDetail() { $('detailModal')?.classList.remove('show'); }
 
 // ============================================================
-// REQUEST AKSES HKI (form pengunjung)
+// REQUEST AKSES HKI
 // ============================================================
 function openHkiRequest(hkiId) {
   const d = cachedData.hki?.find(x => x.id === hkiId);
@@ -825,7 +850,6 @@ async function submitHkiRequest(hkiId) {
     });
     closeDetail();
     toast('success', 'Permintaan Terkirim', 'Admin akan menghubungi Anda via WhatsApp.');
-    // Buka WA admin dengan pesan otomatis
     setTimeout(() => {
       const text = `Halo Admin TODDOPULI,\n\nSaya ${nama} ingin meminta akses download HKI:\n\n• HKI: ${d?.judul}\n• Tujuan: ${tujuan}\n• No. WA saya: ${wa}\n\nTerima kasih.`;
       window.open(waLink(ADMIN_WA, text), '_blank');
@@ -904,7 +928,7 @@ function renderWidgetBerita() {
 
 function renderWidgetPelatihan() {
   const container = $('widgetPelatihan'); if (!container) return;
-  let list = [...(cachedData.pelatihan||[])].sort((a,b) => (new Date(b.tanggal||0)) - (new Date(a.tanggal||0)));
+  let list = cachedData.pelatihan || [];
   const items = list.slice(0, 3);
   if (!items.length) { container.innerHTML = `<div class="widget-empty"><i class="fas fa-chalkboard-teacher"></i>Belum ada pelatihan terbaru.</div>`; return; }
   container.innerHTML = items.map(d => {
@@ -968,7 +992,6 @@ async function submitRegister() {
   if (!/^0\d{8,13}$/.test(wa.replace(/[\s-]/g,''))) { err.textContent = 'Format nomor WA tidak valid (contoh: 08123456789)'; return; }
 
   try {
-    // Cek apakah email sudah terdaftar di registrations
     const dup = cachedData.registrations?.find(r => r.email === email);
     if (dup) {
       err.textContent = 'Email sudah pernah didaftarkan. Tunggu konfirmasi admin.';
@@ -981,7 +1004,6 @@ async function submitRegister() {
     });
     closeRegister();
     toast('success', 'Pendaftaran Terkirim', 'Admin akan menghubungi Anda via WhatsApp.');
-    // Buka WA admin
     setTimeout(() => {
       const text = `Halo Admin TODDOPULI,\n\nSaya baru mendaftar akun TODDOPULI:\n\n• Nama: ${nama}\n• Email: ${email}\n• Kategori: ${kategori}\n• Institusi: ${institusi || '-'}\n• No. WA: ${wa}\n\nMohon dibuatkan akun. Terima kasih.`;
       window.open(waLink(ADMIN_WA, text), '_blank');
@@ -1386,7 +1408,6 @@ function openForm(id = null) {
         html += `<input type="text" id="f_${f.key}" value="${esc(val)}" readonly class="opd-locked">`;
         html += `<small style="color:#1E40AF;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;"><i class="fas fa-lock"></i> Terkunci: <b>${esc(val || '-')}</b></small>`;
       } else if (isMasyarakat()) {
-        // Masyarakat: pilih OPD untuk kolaborasi
         const opdList = (cachedData.opd || []).map(o => o.judul || o.nama).filter(Boolean).sort();
         html += `<select id="f_${f.key}" ${req}>`;
         html += `<option value="">-- Pilih OPD Mitra --</option>`;
@@ -1509,7 +1530,6 @@ async function saveForm() {
     }
   }
 
-  // HKI: status proses default
   if (k === 'hki' && !data.status_proses) data.status_proses = 'Diajukan';
 
   if ((isAdminOpd() || isMasyarakat()) && !editingId) data.createdBy = currentUser?.email;
@@ -1563,6 +1583,126 @@ async function hapusData(id) {
     saveActivity('hapus', k, item?.judul || '');
     toast('success', 'Terhapus', 'Data berhasil dihapus.');
   } catch (e) { toast('error', 'Gagal Hapus', e.message); }
+}
+
+// ============================================================
+// EXPORT / IMPORT
+// ============================================================
+function exportExcel() {
+  const k = currentAdminPage;
+  if (!KATEGORI[k]) return;
+  let data = cachedData[k] || [];
+  data = filterDataForRole(k, data);
+  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+
+  const cfg = KATEGORI[k];
+  const rows = data.map(d => {
+    const row = {};
+    cfg.fields.forEach(f => { row[f.label] = d[f.key] ?? ''; });
+    if (needsApproval(k)) {
+      const status = getApprovalStatus(d);
+      row['Status Approval'] = status === 'approved' ? 'Disetujui'
+        : status === 'pending' ? 'Menunggu' : 'Ditolak';
+    }
+    return row;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, cfg.nama);
+  XLSX.writeFile(wb, `TODDOPULI_${cfg.nama}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('success', 'Export Berhasil', `Data ${cfg.nama} telah diunduh.`);
+}
+
+function exportPDF() {
+  const k = currentAdminPage;
+  if (!KATEGORI[k]) return;
+  let data = cachedData[k] || [];
+  data = filterDataForRole(k, data);
+  if (!data.length) return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
+
+  const cfg = KATEGORI[k];
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  doc.setFontSize(16); doc.setFont(undefined, 'bold');
+  doc.text('TODDOPULI - Bapperida Kota Palopo', 14, 15);
+  doc.setFontSize(11); doc.setFont(undefined, 'normal');
+  doc.text(`Daftar ${cfg.nama}${isAdminOpd() ? ' - ' + currentProfile?.opd : ''}`, 14, 22);
+  doc.setFontSize(9); doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
+
+  const textFields = cfg.fields.filter(f => f.type !== 'image' && f.type !== 'file' && !isUrlField(f.key)).slice(0, 6);
+  const headers = [textFields.map(f => f.label)];
+  const rows = data.map(d => textFields.map(f => String(d[f.key] ?? '').substring(0, 60)));
+
+  doc.autoTable({
+    head: headers, body: rows, startY: 33,
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 248, 255] }
+  });
+
+  doc.save(`TODDOPULI_${cfg.nama}_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('success', 'Export Berhasil', `Data ${cfg.nama} telah diunduh.`);
+}
+
+function triggerImport() {
+  const k = currentAdminPage;
+  if (!KATEGORI[k]) return;
+  if (!isEditorOrAbove()) return toast('error', 'Akses Ditolak', 'Anda tidak punya izin.');
+  $('importFile').click();
+}
+
+async function handleImport(input) {
+  const file = input.files?.[0]; if (!file) return;
+  const k = currentAdminPage;
+  const cfg = KATEGORI[k];
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    if (!rows.length) return toast('error', 'File Kosong', 'Tidak ada data di file Excel.');
+    if (!confirm(`Akan mengimpor ${rows.length} baris ke kategori ${cfg.nama}. Lanjutkan?`)) return;
+
+    const labelToKey = {};
+    cfg.fields.forEach(f => { labelToKey[f.label.toLowerCase().trim()] = f.key; labelToKey[f.key.toLowerCase().trim()] = f.key; });
+
+    const visibleList = filterDataForRole(k, cachedData[k] || []);
+    const existingJudul = new Set(visibleList.map(x => String(x.judul || '').toLowerCase().trim()));
+
+    let success = 0, skipped = 0, failed = 0;
+    for (const row of rows) {
+      const docData = {};
+      Object.keys(row).forEach(col => {
+        const key = labelToKey[col.toLowerCase().trim()];
+        if (key && row[col] !== '') docData[key] = String(row[col]).trim();
+      });
+      if (!docData.judul) { failed++; continue; }
+      const j = docData.judul.toLowerCase().trim();
+      if (existingJudul.has(j)) { skipped++; continue; }
+      if (isAdminOpd() && k === 'inovasi') docData.opd = currentProfile?.opd || docData.opd;
+      if (needsApproval(k)) {
+        if (isAdminOpd() || isMasyarakat()) docData.approval_status = 'pending';
+        else if (canApprove()) {
+          docData.approval_status = 'approved';
+          docData.approvedBy = currentUser?.email;
+          docData.approvedAt = serverTimestamp();
+        }
+      }
+      try {
+        await addDoc(collection(db, k), {
+          ...docData, createdAt: serverTimestamp(),
+          createdBy: currentUser?.email, importedBy: currentUser?.email
+        });
+        existingJudul.add(j); success++;
+      } catch (err) { console.error(err); failed++; }
+    }
+    const msg = `${success} berhasil, ${skipped} dilewati (duplikat), ${failed} gagal.`;
+    toast('success', 'Import Selesai', msg);
+    saveActivity('import', k, msg);
+  } catch (e) { console.error(e); toast('error', 'Import Gagal', e.message); }
+  finally { input.value = ''; }
 }
 
 // ============================================================
@@ -1629,12 +1769,10 @@ async function saveEdukasi() {
   const konten = $('edu_konten')?.value.trim() || '';
   const link_video = $('edu_link_video')?.value.trim() || '';
   const gambar = $('edu_gambar').value.trim();
-
   if (!judul) return toast('error', 'Gagal', 'Judul wajib diisi.');
   if (tipe === 'Video' && !link_video) return toast('error', 'Gagal', 'Link video wajib diisi.');
 
   const data = { judul, tipe, penulis, konten: tipe==='Artikel'?konten:'', link_video: tipe==='Video'?link_video:'', gambar };
-
   try {
     if (editingEdukasiId) {
       await updateDoc(doc(db, 'hki_edukasi', editingEdukasiId), { ...data, updatedAt: serverTimestamp() });
@@ -1747,19 +1885,15 @@ async function approveRegistration(id) {
   if (!password || password.length < 6) { if (password !== null) alert('Password minimal 6 karakter!'); return; }
 
   try {
-    // Buat akun Firebase
     const uid = await createUserSecondary(r.email, password);
-    // Simpan profil
     await setDoc(doc(db, 'users', uid), {
       email: r.email, nama: r.nama, role: 'masyarakat',
       no_wa: r.no_wa, kategori: r.kategori, institusi: r.institusi || '',
       createdAt: serverTimestamp(), createdBy: currentUser?.email
     });
-    // Update status registration
     await updateDoc(doc(db, 'registrations', id), {
       status: 'approved', approvedAt: serverTimestamp(), approvedBy: currentUser?.email, uid
     });
-    // Kirim via WA
     const text = `Halo ${r.nama},\n\nAkun TODDOPULI Anda telah dibuat:\n\n• Email: ${r.email}\n• Password: ${password}\n\nSilakan login di: ${location.origin}${location.pathname.replace('admin.html','index.html')}\n\nTerima kasih.`;
     window.open(waLink(r.no_wa, text), '_blank');
     toast('success', 'Berhasil', 'Akun dibuat. Kirim kredensial via WA.');
@@ -1899,7 +2033,7 @@ async function hapusUser(id) {
 }
 
 // ============================================================
-// ACTIVITY
+// ACTIVITY LOG
 // ============================================================
 function saveActivity(action, kategori, judul) {
   const log = JSON.parse(localStorage.getItem('toddopuli_log') || '[]');
