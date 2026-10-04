@@ -84,7 +84,10 @@
           <i class="fas fa-graduation-cap"></i> Edukasi HKI
         </button>
         <button class="side-btn" onclick="showAdminPage('hki_requests', this)">
-          <i class="fas fa-file-download"></i> Permintaan Akses
+          <i class="fas fa-file-download"></i> Permintaan Akses HKI
+        </button>
+        <button class="side-btn" onclick="showAdminPage('access_requests', this)">
+          <i class="fas fa-file-circle-check"></i> Permintaan Akses Data
         </button>
         <button class="side-btn" onclick="showAdminPage('registrations', this)">
           <i class="fas fa-user-plus"></i> Pendaftaran
@@ -281,6 +284,32 @@
           </div>
 
           <div id="hkiRequestsList" class="crud-list"></div>
+        </div>
+
+        <!-- ==================== PERMINTAAN AKSES DATA ==================== -->
+        <div id="adm-access-requests" class="adm-page">
+          <div class="page-head">
+            <h2><i class="fas fa-file-circle-check"></i> Permintaan Akses Data</h2>
+            <p>Permintaan download file Inovasi / Riset / Publikasi / Database dari pengunjung</p>
+          </div>
+
+          <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            <div>
+              <p>Alur permintaan akses data (Inovasi, Riset, Publikasi, Database):</p>
+              <p style="margin-top:4px;font-size:12px;line-height:1.7;">
+                1. Pengunjung klik <b>"Minta Akses Laporan/Dokumen"</b> di halaman detail item<br>
+                2. Isi nama, nomor WA, instansi, dan tujuan penggunaan<br>
+                3. Admin cek & klik <b>ACC</b> untuk menyetujui<br>
+                4. Kirim link download via <b>Chat WA</b>
+              </p>
+              <p style="margin-top:8px;font-size:12px;color:#1E40AF;">
+                <b>Catatan:</b> File dengan akses <b>"Publik"</b> tidak masuk ke sini — pengunjung langsung bisa download. Yang masuk hanya file dengan akses <b>"Terbatas"</b>.
+              </p>
+            </div>
+          </div>
+
+          <div id="accessRequestsList" class="crud-list"></div>
         </div>
 
         <!-- ==================== PENDAFTARAN MASYARAKAT ==================== -->
