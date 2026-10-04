@@ -1,8 +1,9 @@
 /* ============================================================
-   TODDOPULI v3.2 - Script Utama
+   TODDOPULI v3.3 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
+   + Filter Jenis & Bentuk Inovasi
 ============================================================ */
 
 import {
@@ -174,7 +175,6 @@ function normalizeDriveImageUrl(url) {
   if (!s.includes('drive.google.com') && !s.includes('docs.google.com')) return s;
   const fileId = extractDriveFileId(s);
   if (!fileId) return s;
-  // Google Drive thumbnail endpoint — works with <img>
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
 }
 
@@ -367,7 +367,7 @@ function emptyMsg(text = 'Belum ada data.') {
 }
 
 // ============================================================
-// CARD BUILDER
+// CARD BUILDER (UMUM)
 // ============================================================
 function buildCard(d, k, extraLabel = '') {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
@@ -384,22 +384,64 @@ function buildCard(d, k, extraLabel = '') {
 }
 
 // ============================================================
+// CARD BUILDER KHUSUS INOVASI (dengan badges Jenis + Bentuk)
+// ============================================================
+function buildInovasiCard(d) {
+  const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+  const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="${esc(d.judul)}" loading="lazy" onerror="this.style.display='none'">` : '';
+  const desc = String(d.deskripsi || '');
+  const descCut = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
+  const inovator = d.nama_inovator ? `<div class="meta"><i class="fas fa-user"></i> ${esc(d.nama_inovator)}</div>` : '';
+  const jenis = d.jenis_inovasi ? `<span class="badge badge-jenis">${esc(d.jenis_inovasi)}</span>` : '';
+  const bentuk = d.bentuk_inovasi ? `<span class="badge badge-bentuk">${esc(d.bentuk_inovasi)}</span>` : '';
+  const opdTahun = (d.opd || d.tahun) ? `<span class="badge">${esc(d.opd || '')}${d.opd && d.tahun ? ' • ' : ''}${esc(d.tahun || '')}</span>` : '';
+  return `<div class="item item-inovasi" onclick="showDetail('inovasi','${d.id}')">
+    ${img}
+    <h4>${esc(d.judul)}</h4>
+    <p>${esc(descCut)}</p>
+    <div class="badge-row">
+      ${opdTahun}
+      ${jenis}
+      ${bentuk}
+    </div>
+    ${inovator}
+  </div>`;
+}
+
+// ============================================================
 // RENDER PUBLIK
 // ============================================================
 function renderInovasi() {
   if (!$('listInovasi')) return;
   const q = ($('searchInovasi')?.value || '').toLowerCase();
   const th = $('filterTahunInovasi')?.value || '';
+  const jenis = $('filterJenisInovasi')?.value || '';
+  const bentuk = $('filterBentukInovasi')?.value || '';
+
   let d = cachedData.inovasi;
-  if (q) d = d.filter(x =>
-    (x.judul||'').toLowerCase().includes(q) ||
-    (x.opd||'').toLowerCase().includes(q) ||
-    (x.nama_inovator||'').toLowerCase().includes(q)
-  );
-  if (th) d = d.filter(x => x.tahun === th);
+
+  // Filter pencarian teks
+  if (q) {
+    d = d.filter(x =>
+      (x.judul||'').toLowerCase().includes(q) ||
+      (x.opd||'').toLowerCase().includes(q) ||
+      (x.nama_inovator||'').toLowerCase().includes(q) ||
+      (x.deskripsi||'').toLowerCase().includes(q)
+    );
+  }
+
+  // Filter tahun
+  if (th) d = d.filter(x => String(x.tahun) === String(th));
+
+  // Filter jenis inovasi
+  if (jenis) d = d.filter(x => x.jenis_inovasi === jenis);
+
+  // Filter bentuk inovasi
+  if (bentuk) d = d.filter(x => x.bentuk_inovasi === bentuk);
+
   $('listInovasi').innerHTML = d.length
-    ? d.map(x => buildCard(x, 'inovasi', `${x.opd} • ${x.tahun}`)).join('')
-    : emptyMsg('Belum ada data inovasi.');
+    ? d.map(buildInovasiCard).join('')
+    : emptyMsg('Belum ada data inovasi yang sesuai filter.');
 }
 
 function renderRiset() {
@@ -554,6 +596,16 @@ function showDetail(k, id) {
   if (d.gambar) {
     const imgSrc = getImageUrl(d.gambar);
     html += `<img class="preview-img" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">`;
+  }
+
+  // Info badges (khusus inovasi)
+  if (k === 'inovasi') {
+    let badges = '';
+    if (d.opd) badges += `<span class="badge">${esc(d.opd)}</span> `;
+    if (d.jenis_inovasi) badges += `<span class="badge badge-jenis">${esc(d.jenis_inovasi)}</span> `;
+    if (d.bentuk_inovasi) badges += `<span class="badge badge-bentuk">${esc(d.bentuk_inovasi)}</span> `;
+    if (d.status) badges += `<span class="badge">${esc(d.status)}</span>`;
+    if (badges) html += `<div class="badge-row" style="margin-bottom:14px;">${badges}</div>`;
   }
 
   // Fields lainnya
@@ -1017,14 +1069,18 @@ function openForm(id = null) {
     } else if (isUrlField(f.key)) {
       // Field URL (link Google Drive)
       const isImageField = f.key === 'gambar';
-      html += `<input type="url" id="f_${f.key}" value="${esc(val)}" ${req} 
-        placeholder="${isImageField ? 'https://drive.google.com/file/d/...' : 'https://drive.google.com/file/d/...'}"
+      const placeholder = isImageField
+        ? 'https://drive.google.com/file/d/... (link gambar)'
+        : 'https://drive.google.com/file/d/... (link dokumen)';
+      html += `<input type="url" id="f_${f.key}" value="${esc(val)}" ${req}
+        placeholder="${placeholder}"
         style="font-family:monospace;font-size:12px;">`;
       if (val) {
-        const previewUrl = isImageField ? normalizeDriveUrl(val) : normalizeDriveUrl(val);
+        // Untuk gambar: preview URL thumbnail; untuk dokumen: preview URL
+        const checkUrl = isImageField ? getImageUrl(val) : normalizeDriveUrl(val);
         html += `<small style="display:block;margin-top:-6px;margin-bottom:10px;">
-          <a href="${esc(previewUrl)}" target="_blank" rel="noopener" style="color:var(--primary);font-size:11px;font-weight:600;">
-            <i class="fas fa-external-link-alt"></i> Cek link
+          <a href="${esc(checkUrl)}" target="_blank" rel="noopener" style="color:var(--primary);font-size:11px;font-weight:600;">
+            <i class="fas fa-external-link-alt"></i> Cek ${isImageField ? 'gambar' : 'link'}
           </a>
         </small>`;
       }
@@ -1244,7 +1300,6 @@ function exportPDF() {
   doc.setFontSize(9);
   doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 28);
 
-  // Ambil field text (bukan URL, bukan gambar, bukan file)
   const textFields = cfg.fields.filter(f =>
     f.type !== 'image' &&
     f.type !== 'file' &&
