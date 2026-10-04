@@ -1010,3 +1010,27 @@ main { padding: 40px 16px 60px; }
   .chart-card { min-height: 250px; padding: 14px; }
   .chart-card canvas { max-height: 200px; min-height: 180px; }
 }
+
+/* ============ BADGE JENIS & BENTUK INOVASI ============ */
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.badge-jenis {
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+}
+.badge-bentuk {
+  background: #DCFCE7 !important;
+  color: #166534 !important;
+}
+.item-inovasi .meta {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
