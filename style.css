@@ -2,6 +2,7 @@
    TODDOPULI - STYLESHEET
    Bapperida Kota Palopo
    Tema: Biru Navy Profesional
+   + Admin OPD Support
 ============================================================ */
 
 /* ==================== RESET & VARIABEL ==================== */
@@ -441,6 +442,22 @@ main { padding: 40px 16px 60px; }
 .info-box p { font-size: 13px; color: var(--primary-dark); }
 .info-box a { color: var(--primary); font-weight: 700; text-decoration: underline; }
 
+/* Info box varian: warning (kuning) */
+.info-box.warning {
+  background: #FEF3C7;
+  border-left-color: var(--warning);
+}
+.info-box.warning i { color: var(--warning); }
+.info-box.warning p { color: #92400E; }
+
+/* Info box varian: locked (biru gelap, untuk OPD terkunci) */
+.info-box.locked {
+  background: #DBEAFE;
+  border-left-color: var(--primary);
+}
+.info-box.locked i { color: var(--primary); }
+.info-box.locked p { color: var(--primary-dark); }
+
 
 /* ==================== MODAL ==================== */
 .modal {
@@ -499,6 +516,42 @@ main { padding: 40px 16px 60px; }
   font-size: 12px;
   letter-spacing: 0.2px;
 }
+
+/* Input OPD terkunci (untuk Admin OPD) */
+.modal input.opd-locked,
+.modal input[readonly] {
+  background: #E2E8F0 !important;
+  cursor: not-allowed;
+  font-weight: 600;
+  color: var(--primary) !important;
+}
+.modal input[readonly]:focus {
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+  background: #E2E8F0 !important;
+}
+
+/* Wrapper OPD di form user (di-inject via JS) */
+#u_opd_wrapper {
+  margin-bottom: 12px;
+}
+#u_opd_wrapper select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  background: var(--light);
+  transition: 0.2s;
+}
+#u_opd_wrapper select:focus {
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+}
+
 .login-hint {
   background: var(--primary-soft); padding: 12px;
   border-radius: 10px; font-size: 12px; margin-bottom: 16px;
@@ -750,6 +803,14 @@ main { padding: 40px 16px 60px; }
   font-size: 10px; background: var(--primary-soft);
   color: var(--primary); font-weight: 600;
 }
+.crud-item .meta {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .crud-actions {
   display: flex; gap: 6px; margin-top: 12px;
   padding-top: 12px; border-top: 1px solid var(--border);
@@ -761,7 +822,11 @@ main { padding: 40px 16px 60px; }
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   transition: 0.2s;
 }
-.crud-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.crud-actions button:disabled { 
+  opacity: 0.4; 
+  cursor: not-allowed; 
+  filter: grayscale(0.5);
+}
 .btn-edit { background: var(--primary-soft); color: var(--primary); }
 .btn-edit:hover:not(:disabled) { background: var(--primary); color: #fff; }
 .btn-del { background: #FEE2E2; color: var(--danger); }
@@ -904,8 +969,34 @@ main { padding: 40px 16px 60px; }
 }
 .role-super_admin { background: #FEE2E2; color: #DC2626; }
 .role-admin { background: #DBEAFE; color: #1E40AF; }
+.role-admin_opd { background: #E0E7FF; color: #4338CA; }
 .role-editor { background: #FEF3C7; color: #92400E; }
 .role-viewer { background: #F1F5F9; color: #64748B; }
+
+
+/* ==================== BADGE JENIS & BENTUK INOVASI ==================== */
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.badge-jenis {
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+}
+.badge-bentuk {
+  background: #DCFCE7 !important;
+  color: #166534 !important;
+}
+.item-inovasi .meta {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 
 /* ============================================================
@@ -1009,28 +1100,4 @@ main { padding: 40px 16px 60px; }
   /* Chart di HP: tinggi lebih kecil */
   .chart-card { min-height: 250px; padding: 14px; }
   .chart-card canvas { max-height: 200px; min-height: 180px; }
-}
-
-/* ============ BADGE JENIS & BENTUK INOVASI ============ */
-.badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.badge-jenis {
-  background: #FEF3C7 !important;
-  color: #92400E !important;
-}
-.badge-bentuk {
-  background: #DCFCE7 !important;
-  color: #166534 !important;
-}
-.item-inovasi .meta {
-  font-size: 11px;
-  color: #94A3B8;
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
