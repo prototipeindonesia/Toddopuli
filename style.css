@@ -1,11 +1,12 @@
 /* ============================================================
-   TODDOPULI - STYLESHEET v4.0
+   TODDOPULI - STYLESHEET v4.2
    Bapperida Kota Palopo
    Tema: Biru Navy Profesional
    + Admin OPD Support
    + Approval/ACC System
    + Widget Homepage
    + HKI Extended (Banner, Edukasi, Request, Masyarakat)
+   + Pelatihan Viewer (Admin OPD & Masyarakat)
 ============================================================ */
 
 /* ==================== RESET & VARIABEL ==================== */
@@ -829,6 +830,59 @@ main { padding: 40px 16px 60px; }
 
 
 /* ============================================================
+   CRUD ITEM PELATIHAN (untuk Admin OPD & Masyarakat)
+============================================================ */
+.crud-item-pelatihan {
+  border-left: 4px solid var(--success) !important;
+  background: linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%);
+  position: relative;
+}
+.crud-item-pelatihan::after {
+  content: '📚';
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 18px;
+  opacity: 0.15;
+}
+.crud-item-pelatihan h4 {
+  color: #065F46 !important;
+  margin-bottom: 6px;
+  padding-right: 30px;
+}
+.crud-item-pelatihan p {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.55;
+}
+.crud-item-pelatihan .badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.crud-item-pelatihan .btn-ikuti {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--success);
+  color: #fff;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: 0.2s;
+  box-shadow: 0 2px 8px rgba(5,150,105,0.25);
+}
+.crud-item-pelatihan .btn-ikuti:hover {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(5,150,105,0.35);
+}
+
+
+/* ============================================================
    APPROVAL BADGE
 ============================================================ */
 .approval-badge {
@@ -1322,6 +1376,34 @@ main { padding: 40px 16px 60px; }
 
 
 /* ============================================================
+   TOMBOL IKUTI DI WIDGET (Homepage Pelatihan Terbaru)
+============================================================ */
+.widget-item-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--success);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: 0.2s;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(5,150,105,0.25);
+}
+.widget-item-btn:hover {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(5,150,105,0.35);
+}
+.widget-item-btn i {
+  font-size: 9px;
+}
+
+
+/* ============================================================
    HKI HERO BANNER (Ajukan HKI)
 ============================================================ */
 .hki-hero-banner {
@@ -1386,7 +1468,7 @@ main { padding: 40px 16px 60px; }
 
 
 /* ============================================================
-   TOMBOL IKUTI PELATIHAN
+   TOMBOL IKUTI PELATIHAN (Card Pelatihan)
 ============================================================ */
 .btn-ikuti {
   display: inline-flex; align-items: center; gap: 6px;
@@ -1501,7 +1583,6 @@ main { padding: 40px 16px 60px; }
   .widget-body { padding: 12px 14px 14px; }
   .widget-item-img { width: 60px; height: 60px; }
 
-  /* HKI Hero: vertical di HP sedang */
   .hki-hero-content { flex-direction: column; text-align: center; }
   .hki-hero-btn { width: 100%; justify-content: center; }
   .hki-hero-icon { margin: 0 auto; }
@@ -1564,4 +1645,12 @@ main { padding: 40px 16px 60px; }
   .hki-hero-icon { width: 50px; height: 50px; font-size: 24px; }
   .hki-hero-content h3 { font-size: 16px; }
   .hki-hero-content p { font-size: 12px; }
+
+  /* Pelatihan admin card di HP */
+  .crud-item-pelatihan .btn-ikuti {
+    width: 100%;
+    justify-content: center;
+    font-size: 11px;
+    padding: 8px 12px;
+  }
 }
