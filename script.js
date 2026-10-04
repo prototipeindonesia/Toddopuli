@@ -1,9 +1,10 @@
 /* ============================================================
-   TODDOPULI v3.4 - Script Utama
+   TODDOPULI v3.5 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter Jenis & Bentuk Inovasi + ROLE ADMIN OPD
+   + Sinkron dengan admin.html v3.5
 ============================================================ */
 
 import {
@@ -266,7 +267,6 @@ function isAdmin() { return role() === 'admin'; }
 function isAdminOpd() { return role() === 'admin_opd'; }
 function isEditor() { return role() === 'editor'; }
 
-// Siapa saja yang bisa mengakses panel admin
 function isAnyAdmin() {
   return ['super_admin', 'admin', 'admin_opd', 'editor'].includes(role());
 }
@@ -281,14 +281,11 @@ function isEditorOrAbove() {
 function filterDataForRole(kategori, list) {
   if (!isAdminOpd()) return list;
   if (kategori === 'inovasi') {
-    // Inovasi difilter berdasarkan OPD
     return list.filter(d => d.opd === currentProfile?.opd);
   }
   if (kategori === 'riset' || kategori === 'pelatihan') {
-    // Riset & Pelatihan difilter berdasarkan siapa yang input
     return list.filter(d => d.createdBy === currentUser?.email);
   }
-  // Kategori lain tidak boleh diakses admin OPD
   return [];
 }
 
@@ -316,14 +313,39 @@ function canDeleteItem(kategori, d) {
     }
     return false;
   }
-  return false; // Editor tidak bisa hapus
+  return false;
 }
 
 // ============================================================
-// TERAPKAN ROLE KE UI (SIDEBAR & STAT CARDS)
+// TERAPKAN ROLE KE UI (SIDEBAR & STAT CARDS & SIDEBAR INFO)
 // ============================================================
 function applyRoleToUI() {
-  // Sembunyikan menu sidebar yang tidak diizinkan
+  // === 1. Update Sidebar User Info ===
+  const sidebarInfo = $('sidebarUserInfo');
+  if (sidebarInfo) {
+    if (currentProfile?.nama || role()) {
+      const roleLabel = (role() || 'viewer').replace('_', ' ');
+      const opdLine = (isAdminOpd() && currentProfile?.opd)
+        ? `<div style="margin-top:4px;color:#1E40AF;font-weight:600;">
+             <i class="fas fa-building"></i> ${esc(currentProfile.opd)}
+           </div>`
+        : '';
+      sidebarInfo.innerHTML = `
+        <div style="font-weight:700;color:#1E3A8A;">
+          <i class="fas fa-user-circle"></i> ${esc(currentProfile?.nama || currentUser?.email || '-')}
+        </div>
+        <div style="margin-top:2px;text-transform:capitalize;">
+          <i class="fas fa-shield-halved"></i> ${esc(roleLabel)}
+        </div>
+        ${opdLine}
+      `;
+      sidebarInfo.style.display = 'block';
+    } else {
+      sidebarInfo.style.display = 'none';
+    }
+  }
+
+  // === 2. Sembunyikan menu sidebar yang tidak diizinkan ===
   document.querySelectorAll('.side-btn').forEach(btn => {
     const onclickAttr = btn.getAttribute('onclick') || '';
     const match = onclickAttr.match(/showAdminPage\('([^']+)'/);
@@ -335,19 +357,17 @@ function applyRoleToUI() {
     if (isAdminOpd()) {
       show = ADMIN_OPD_MENUS.includes(page);
     } else if (isEditor()) {
-      // Editor bisa akses semua kecuali users
       if (page === 'users') show = false;
     } else if (isAdmin()) {
       if (page === 'users') show = false;
     }
-    // super_admin: semua tampil
 
     if (page === 'users' && !isSuperAdmin()) show = false;
 
     btn.style.display = show ? 'flex' : 'none';
   });
 
-  // Sembunyikan stat card yang tidak diizinkan untuk admin_opd
+  // === 3. Sembunyikan stat card yang tidak diizinkan untuk admin_opd ===
   document.querySelectorAll('.stat-card').forEach(card => {
     const h3 = card.querySelector('h3');
     const id = h3?.id || '';
@@ -358,8 +378,24 @@ function applyRoleToUI() {
     }
   });
 
-  // Sembunyikan tombol export/import untuk admin OPD (opsional)
-  // Admin OPD tetap bisa export data mereka sendiri, jadi tetap tampil
+  // === 4. Update subtitle dashboard & galeri untuk admin OPD ===
+  const dashSub = $('dashboardSubtitle');
+  if (dashSub) {
+    if (isAdminOpd()) {
+      dashSub.textContent = `Ringkasan data TODDOPULI — ${currentProfile?.opd || 'OPD Anda'}`;
+    } else {
+      dashSub.textContent = 'Ringkasan data TODDOPULI';
+    }
+  }
+
+  const galeriSub = $('galeriSubtitle');
+  if (galeriSub) {
+    if (isAdminOpd()) {
+      galeriSub.textContent = `Gambar dari data ${currentProfile?.opd || 'OPD Anda'}`;
+    } else {
+      galeriSub.textContent = 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
+    }
+  }
 }
 
 // ============================================================
@@ -450,13 +486,11 @@ function startRealtimeListeners() {
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
 
-  // Data publik (index.html) — selalu tampil semua
   set('statInovasi', cachedData.inovasi.length);
   set('statRiset', cachedData.riset.length);
   set('statHki', cachedData.hki.length);
   set('statBerita', cachedData.berita.length);
 
-  // Dashboard admin — filter untuk admin OPD
   let inovasiCount = cachedData.inovasi.length;
   let risetCount = cachedData.riset.length;
   let pelatihanCount = cachedData.pelatihan.length;
@@ -614,7 +648,6 @@ function getGaleriItems(filterKategori = '', query = '') {
   ['inovasi','berita','pelatihan'].forEach(k => {
     if (filterKategori && filterKategori !== k) return;
     let list = cachedData[k];
-    // Admin OPD: galeri hanya menampilkan gambar dari data mereka
     if (isAdminOpd()) {
       list = filterDataForRole(k, list);
     }
@@ -815,14 +848,14 @@ onAuthStateChanged(auth, async (user) => {
       $('authScreen').style.display = 'none';
       $('adminApp').style.display = 'block';
 
-      // Tampilkan nama + role + OPD (kalau admin OPD)
+      // Tampilkan nama + role + OPD di header
       let label = `${currentProfile.nama || user.email} (${role() || 'viewer'})`;
       if (isAdminOpd() && currentProfile.opd) {
         label = `${currentProfile.nama || user.email} (Admin OPD: ${currentProfile.opd})`;
       }
       $('userEmail').textContent = label;
 
-      // Terapkan role ke UI (sembunyikan menu)
+      // Terapkan role ke UI
       applyRoleToUI();
 
       initAdmin();
@@ -866,7 +899,9 @@ async function initAdmin() {
   renderActivity();
   startRealtimeListeners();
 
-  // Set halaman awal yang valid untuk role ini
+  // Re-apply role setelah data OPD ke-load (biar dropdown OPD keisi)
+  applyRoleToUI();
+
   let startPage = 'dashboard';
   if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(startPage)) {
     startPage = ADMIN_OPD_MENUS[0];
@@ -889,7 +924,7 @@ const PAGE_TITLES = {
 };
 
 function showAdminPage(page, btn) {
-  // Cek apakah role diizinkan mengakses halaman ini
+  // Cek izin akses halaman
   if (isAdminOpd() && !ADMIN_OPD_MENUS.includes(page)) {
     toast('error', 'Akses Ditolak', 'Anda tidak punya akses ke menu ini.');
     return;
@@ -908,9 +943,23 @@ function showAdminPage(page, btn) {
   if (page === 'dashboard') {
     $('adm-dashboard').classList.add('active');
     updateStats();
+    // Set subtitle dinamis
+    const sub = $('dashboardSubtitle');
+    if (sub) {
+      sub.textContent = isAdminOpd()
+        ? `Ringkasan data TODDOPULI — ${currentProfile?.opd || 'OPD Anda'}`
+        : 'Ringkasan data TODDOPULI';
+    }
     requestAnimationFrame(() => renderDashboardCharts());
   } else if (page === 'galeri') {
     $('adm-galeri').classList.add('active');
+    // Set subtitle dinamis
+    const sub = $('galeriSubtitle');
+    if (sub) {
+      sub.textContent = isAdminOpd()
+        ? `Gambar dari data ${currentProfile?.opd || 'OPD Anda'}`
+        : 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
+    }
     renderGaleri();
   } else if (page === 'users') {
     $('adm-users').classList.add('active');
@@ -938,13 +987,12 @@ function renderDashboardCharts() {
     return;
   }
 
-  // Data yang dipakai untuk chart (filter untuk admin OPD)
   let inovasiData = cachedData.inovasi;
   if (isAdminOpd()) {
     inovasiData = filterDataForRole('inovasi', inovasiData);
   }
 
-  // Chart 1: Inovasi per Tahun (Bar)
+  // Chart 1: Inovasi per Tahun
   const tahunMap = {};
   inovasiData.forEach(x => {
     if (x.tahun) tahunMap[x.tahun] = (tahunMap[x.tahun] || 0) + 1;
@@ -975,7 +1023,7 @@ function renderDashboardCharts() {
     });
   }
 
-  // Chart 2: Inovasi per OPD (Doughnut)
+  // Chart 2: Inovasi per OPD
   const opdMap = {};
   inovasiData.forEach(x => {
     if (x.opd) opdMap[x.opd] = (opdMap[x.opd] || 0) + 1;
@@ -1084,7 +1132,6 @@ function renderCrud() {
 
   const q = ($('crudSearch')?.value || '').toLowerCase();
 
-  // Filter data berdasarkan role
   let list = cachedData[k] || [];
   list = filterDataForRole(k, list);
 
@@ -1102,7 +1149,6 @@ function renderCrud() {
       const editable = canEditItem(k, d);
       const deletable = canDeleteItem(k, d);
 
-      // Info pemilik untuk admin OPD
       const ownerInfo = (isAdminOpd() && d.createdBy)
         ? `<div class="meta" style="font-size:10px;color:#94A3B8;margin-top:4px;">
              <i class="fas fa-user"></i> ${esc(d.createdBy)}
@@ -1144,7 +1190,6 @@ function openForm(id = null) {
     return;
   }
 
-  // Kalau edit, pastikan item ada dan bisa diedit
   if (id) {
     const existing = cachedData[k]?.find(x => x.id === id);
     if (!existing) return;
@@ -1184,13 +1229,11 @@ function openForm(id = null) {
       // KHUSUS ADMIN OPD: OPD otomatis dari profil & terkunci
       if (isAdminOpd()) {
         val = currentProfile?.opd || '';
-        html += `<input type="text" id="f_${f.key}" value="${esc(val)}" readonly
-          style="background:#E2E8F0;cursor:not-allowed;font-weight:600;color:#1E3A8A;">`;
+        html += `<input type="text" id="f_${f.key}" value="${esc(val)}" readonly class="opd-locked">`;
         html += `<small style="color:#1E40AF;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
           <i class="fas fa-lock"></i> OPD terkunci: <b>${esc(val || '-')}</b>
         </small>`;
       } else {
-        // Admin/Editor/Super Admin: dropdown biasa
         const opdList = (cachedData.opd || [])
           .map(o => o.judul || o.nama)
           .filter(Boolean)
@@ -1346,7 +1389,6 @@ async function saveForm() {
   const btn = $('saveBtn');
   const data = {};
 
-  // Validasi & kumpulkan data teks
   for (const f of cfg.fields) {
     if (f.type === 'image' || f.type === 'file') continue;
     const el = $('f_' + f.key);
@@ -1358,7 +1400,6 @@ async function saveForm() {
     if (v !== '') data[f.key] = v;
   }
 
-  // Ambil URL file lama (untuk edit tanpa ganti file)
   for (const f of cfg.fields) {
     if (f.type !== 'image' && f.type !== 'file') continue;
     const hidden = $('f_' + f.key);
@@ -1370,7 +1411,6 @@ async function saveForm() {
     data.opd = currentProfile?.opd || data.opd;
   }
 
-  // Untuk riset & pelatihan admin OPD: pastikan createdBy terisi
   if (isAdminOpd() && (k === 'riset' || k === 'pelatihan')) {
     if (!editingId) {
       data.createdBy = currentUser?.email;
@@ -1393,7 +1433,6 @@ async function saveForm() {
     }
 
     if (editingId) {
-      // Cek ulang izin edit
       const existing = cachedData[k].find(x => x.id === editingId);
       if (!canEditItem(k, existing)) {
         throw new Error('Anda tidak dapat mengedit data ini.');
@@ -1454,7 +1493,6 @@ function exportExcel() {
   const k = currentAdminPage;
   if (!KATEGORI[k]) return;
   let data = cachedData[k] || [];
-  // Filter data untuk admin OPD
   data = filterDataForRole(k, data);
   if (!data.length) {
     return toast('error', 'Tidak Ada Data', 'Belum ada data untuk diexport.');
@@ -1563,7 +1601,6 @@ async function handleImport(input) {
       labelToKey[f.key.toLowerCase().trim()] = f.key;
     });
 
-    // Set judul existing (untuk cek duplikat) — hanya untuk data yang visible ke user
     const visibleList = filterDataForRole(k, cachedData[k] || []);
     const existingJudul = new Set(
       visibleList.map(x => String(x.judul || '').toLowerCase().trim())
@@ -1583,7 +1620,6 @@ async function handleImport(input) {
       const j = docData.judul.toLowerCase().trim();
       if (existingJudul.has(j)) { skipped++; continue; }
 
-      // KHUSUS ADMIN OPD: paksa OPD
       if (isAdminOpd() && k === 'inovasi') {
         docData.opd = currentProfile?.opd || docData.opd;
       }
@@ -1649,50 +1685,40 @@ function renderUsers() {
 }
 
 // ============================================================
-// INJECT OPD FIELD KE USER MODAL
+// USER FORM - OPD FIELD (sudah ada di HTML)
 // ============================================================
-function injectOpdFieldToUserForm() {
-  if ($('u_opd_wrapper')) return; // sudah ada, skip
-
-  const roleSelect = $('u_role');
-  if (!roleSelect) return;
-
-  // Buat wrapper
-  const wrapper = document.createElement('div');
-  wrapper.id = 'u_opd_wrapper';
-  wrapper.style.display = 'none';
-  wrapper.innerHTML = `
-    <label>OPD (untuk Admin OPD)</label>
-    <select id="u_opd">
-      <option value="">-- Pilih OPD --</option>
-    </select>
-  `;
-
-  // Sisipkan setelah role select
-  roleSelect.parentNode.insertBefore(wrapper, roleSelect.nextSibling);
-
-  // Populate OPD options
-  const opdOptions = (cachedData.opd || [])
-    .map(o => o.judul || o.nama)
-    .filter(Boolean)
-    .sort();
-  const sel = $('u_opd');
-  opdOptions.forEach(o => {
-    const opt = document.createElement('option');
-    opt.value = o;
-    opt.textContent = o;
-    sel.appendChild(opt);
-  });
-
-  // Toggle saat role berubah
-  roleSelect.addEventListener('change', toggleUserOpdField);
-}
-
 function toggleUserOpdField() {
   const wrapper = $('u_opd_wrapper');
   if (!wrapper) return;
   const r = $('u_role')?.value;
   wrapper.style.display = r === 'admin_opd' ? 'block' : 'none';
+}
+
+/** Populate dropdown OPD dari cache */
+function populateOpdDropdown(selectedValue = '') {
+  const sel = $('u_opd');
+  if (!sel) return;
+
+  // Reset dulu (kecuali option pertama)
+  sel.innerHTML = '<option value="">-- Pilih OPD --</option>';
+
+  const opdOptions = (cachedData.opd || [])
+    .map(o => o.judul || o.nama)
+    .filter(Boolean)
+    .sort();
+
+  if (opdOptions.length === 0) {
+    sel.innerHTML = '<option value="">-- Belum ada OPD. Tambahkan dulu di menu OPD --</option>';
+    return;
+  }
+
+  opdOptions.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o;
+    opt.textContent = o;
+    if (o === selectedValue) opt.selected = true;
+    sel.appendChild(opt);
+  });
 }
 
 function openUserForm() {
@@ -1705,7 +1731,9 @@ function openUserForm() {
   $('u_email').disabled = false;
   $('u_pass').parentElement.style.display = 'block';
 
-  injectOpdFieldToUserForm();
+  // Populate dropdown OPD
+  populateOpdDropdown();
+  // Sembunyikan field OPD (karena default role = admin)
   toggleUserOpdField();
 
   $('userModal').classList.add('show');
@@ -1722,8 +1750,9 @@ function editUser(id) {
   $('u_email').disabled = true;
   $('u_pass').parentElement.style.display = 'none';
 
-  injectOpdFieldToUserForm();
-  if ($('u_opd')) $('u_opd').value = u.opd || '';
+  // Populate dropdown OPD dengan nilai yang tersimpan
+  populateOpdDropdown(u.opd || '');
+  // Tampilkan field OPD jika role = admin_opd
   toggleUserOpdField();
 
   $('userModal').classList.add('show');
@@ -1768,7 +1797,6 @@ async function saveUser() {
 
   if (!email) return toast('error', 'Gagal', 'Email wajib diisi.');
 
-  // Validasi khusus admin_opd
   if (r === 'admin_opd' && !opd) {
     return toast('error', 'Gagal', 'Pilih OPD untuk Admin OPD.');
   }
@@ -1944,7 +1972,8 @@ Object.assign(window, {
   renderGaleri, renderPubGaleri, openUserForm, editUser, closeUserForm, saveUser, hapusUser,
   renderInovasi, renderRiset, renderPublikasi, renderHki,
   renderBerita, renderPelatihan, renderDatabase, renderCrud,
-  normalizeDriveUrl, normalizeDriveImageUrl
+  normalizeDriveUrl, normalizeDriveImageUrl,
+  toggleUserOpdField  // ← ditambahkan karena dipanggil via onchange di HTML
 });
 
 // ============================================================
