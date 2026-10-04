@@ -122,61 +122,44 @@
       </div>
     </div>
 
-    <!-- ============================================
-         WIDGET: BERITA TERBARU & PELATIHAN TERBARU
-         ============================================ -->
+    <!-- WIDGET: BERITA & PELATIHAN TERBARU -->
     <div class="widget-grid" style="margin-top:50px;">
-
-      <!-- WIDGET BERITA TERBARU -->
       <div class="widget-card" id="widgetBeritaWrap">
         <div class="widget-head">
-          <h3>
-            <i class="fas fa-newspaper"></i>
-            Berita Terbaru
-          </h3>
-          <a onclick="showPage('berita')" class="widget-more">
-            Lihat Semua <i class="fas fa-arrow-right"></i>
-          </a>
+          <h3><i class="fas fa-newspaper"></i> Berita Terbaru</h3>
+          <a onclick="showPage('berita')" class="widget-more">Lihat Semua <i class="fas fa-arrow-right"></i></a>
         </div>
         <div id="widgetBerita" class="widget-body">
           <div class="loading">Memuat berita...</div>
         </div>
       </div>
 
-      <!-- WIDGET PELATIHAN TERBARU -->
       <div class="widget-card" id="widgetPelatihanWrap">
         <div class="widget-head">
-          <h3>
-            <i class="fas fa-chalkboard-teacher"></i>
-            Pelatihan Terbaru
-          </h3>
-          <a onclick="showPage('pelatihan')" class="widget-more">
-            Lihat Semua <i class="fas fa-arrow-right"></i>
-          </a>
+          <h3><i class="fas fa-chalkboard-teacher"></i> Pelatihan Terbaru</h3>
+          <a onclick="showPage('pelatihan')" class="widget-more">Lihat Semua <i class="fas fa-arrow-right"></i></a>
         </div>
         <div id="widgetPelatihan" class="widget-body">
           <div class="loading">Memuat pelatihan...</div>
         </div>
       </div>
-
     </div>
 
-    <!-- WIDGET CTA: Ajukan Inovasi -->
+    <!-- WIDGET CTA: Ajukan Inovasi / HKI -->
     <div class="widget-cta" style="margin-top:30px;">
       <div class="widget-cta-content">
         <div class="widget-cta-icon">
           <i class="fas fa-lightbulb"></i>
         </div>
         <div class="widget-cta-text">
-          <h3>Punya Inovasi Daerah?</h3>
-          <p>Ajukan inovasi Anda melalui Panel Admin OPD untuk ditampilkan di portal ini.</p>
+          <h3>Punya Inovasi atau Karya?</h3>
+          <p>Ajukan inovasi daerah atau daftarkan Hak Kekayaan Intelektual (HKI) Anda di TODDOPULI.</p>
         </div>
         <a href="admin.html" class="widget-cta-btn">
           <i class="fas fa-paper-plane"></i> Ajukan Sekarang
         </a>
       </div>
     </div>
-
   </section>
 
   <!-- INOVASI -->
@@ -226,16 +209,61 @@
     <div id="listPublikasi" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
 
-  <!-- HKI -->
+  <!-- ==================== HKI (LENGKAP) ==================== -->
   <section id="page-hki" class="page">
-    <h2 class="section-title"><i class="fas fa-certificate"></i> Kelola HKI</h2>
-    <div class="info-box">
-      <i class="fas fa-info-circle"></i>
-      <p>Untuk menambah/mengedit data HKI, silakan login sebagai admin melalui <a href="admin.html">Panel Admin</a>.</p>
+    <h2 class="section-title"><i class="fas fa-certificate"></i> Kelola Hak Kekayaan Intelektual</h2>
+
+    <!-- HERO BANNER: AJUKAN HKI -->
+    <div class="hki-hero-banner">
+      <div class="hki-hero-content">
+        <div class="hki-hero-icon"><i class="fas fa-certificate"></i></div>
+        <div>
+          <h3>Daftarkan HKI Anda Sekarang</h3>
+          <p>Ajukan Hak Kekayaan Intelektual untuk karya inovasi Anda. Terbuka untuk OPD dan masyarakat umum (dosen, mahasiswa, pelajar, swasta).</p>
+        </div>
+        <a href="admin.html" class="hki-hero-btn">
+          <i class="fas fa-paper-plane"></i> Daftar HKI
+        </a>
+      </div>
     </div>
+
+    <!-- WIDGET HKI TERDAFTAR + EDUKASI HKI -->
+    <div class="widget-grid" style="margin-bottom:24px;">
+      <div class="widget-card">
+        <div class="widget-head">
+          <h3><i class="fas fa-certificate"></i> HKI Terdaftar</h3>
+          <span class="widget-more" style="cursor:default;">Terbaru</span>
+        </div>
+        <div id="hkiWidgetList" class="widget-body">
+          <div class="loading">Memuat HKI...</div>
+        </div>
+      </div>
+
+      <div class="widget-card">
+        <div class="widget-head">
+          <h3><i class="fas fa-graduation-cap"></i> Edukasi HKI</h3>
+          <span class="widget-more" style="cursor:default;">Artikel & Video</span>
+        </div>
+        <div id="hkiEdukasiList" class="widget-body">
+          <div class="loading">Memuat edukasi...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info akses download -->
+    <div class="info-box">
+      <i class="fas fa-lock"></i>
+      <div>
+        <p><b>Cara Mendapatkan File HKI:</b> Klik <b>"Minta Akses Download"</b> pada HKI yang Anda inginkan. Isi nomor WhatsApp, admin akan mengirimkan link download setelah diverifikasi.</p>
+        <p style="margin-top:4px;font-size:12px;">Pemilik HKI dapat langsung mengunduh file miliknya tanpa perlu verifikasi.</p>
+      </div>
+    </div>
+
+    <!-- LIST HKI LENGKAP -->
+    <h3 style="font-size:16px;color:var(--primary);margin:20px 0 12px;"><i class="fas fa-list"></i> Daftar HKI Terdaftar</h3>
     <div class="toolbar">
       <i class="fas fa-search toolbar-icon"></i>
-      <input type="text" id="searchHki" placeholder="Cari HKI..." oninput="renderHki()">
+      <input type="text" id="searchHki" placeholder="Cari HKI berdasarkan judul, pemilik, nomor..." oninput="renderHki()">
     </div>
     <div id="listHki" class="list-grid"><div class="loading">Memuat data...</div></div>
   </section>
@@ -283,7 +311,7 @@
   <div class="modal-content">
     <span class="close" onclick="closeLogin()">&times;</span>
     <h2><i class="fas fa-user-lock"></i> Login TODDOPULI</h2>
-    <p class="login-hint">Gunakan email & password yang terdaftar.<br>Admin dapat mengakses Panel Admin setelah login.</p>
+    <p class="login-hint">Gunakan email & password yang terdaftar.<br>Admin & OPD dapat mengakses Panel setelah login.</p>
     <label>Username/Email</label>
     <input type="email" id="loginEmail" placeholder="masukkan username/email">
     <label>Password</label>
@@ -291,10 +319,61 @@
     <button class="btn-primary full" onclick="doLogin()">
       <i class="fas fa-sign-in-alt"></i> Masuk
     </button>
-    <button class="btn-secondary full" onclick="loginGuest()">
+    <button class="btn-secondary full" onclick="loginGuest()" style="margin-top:8px;">
       <i class="fas fa-user"></i> Masuk sebagai Pengunjung
     </button>
+    <button class="btn-secondary full" onclick="openRegister()" style="margin-top:8px;">
+      <i class="fas fa-user-plus"></i> Daftar sebagai Masyarakat Umum
+    </button>
     <p id="loginError" class="error-msg"></p>
+  </div>
+</div>
+
+<!-- ==================== REGISTER MODAL ==================== -->
+<div class="modal" id="registerModal">
+  <div class="modal-content">
+    <span class="close" onclick="closeRegister()">&times;</span>
+    <h2><i class="fas fa-user-plus"></i> Daftar Akun Masyarakat</h2>
+    <p class="login-hint">
+      Terbuka untuk <b>dosen, mahasiswa, pelajar, swasta, dan masyarakat umum</b>.<br>
+      Admin akan menghubungi Anda via <b>WhatsApp</b> setelah pendaftaran.
+    </p>
+
+    <label>Nama Lengkap <span style="color:#DC2626">*</span></label>
+    <input type="text" id="reg_nama" placeholder="Nama lengkap">
+
+    <label>Email <span style="color:#DC2626">*</span></label>
+    <input type="email" id="reg_email" placeholder="nama@email.com">
+
+    <label>Nomor WhatsApp <span style="color:#DC2626">*</span></label>
+    <input type="tel" id="reg_wa" placeholder="08xx xxxx xxxx">
+
+    <label>Kategori <span style="color:#DC2626">*</span></label>
+    <select id="reg_kategori">
+      <option value="">-- Pilih Kategori --</option>
+      <option>Mahasiswa</option>
+      <option>Pelajar</option>
+      <option>Dosen</option>
+      <option>Peneliti</option>
+      <option>Swasta</option>
+      <option>ASN</option>
+      <option>Masyarakat Umum</option>
+      <option>Lainnya</option>
+    </select>
+
+    <label>Institusi / Instansi</label>
+    <input type="text" id="reg_institusi" placeholder="Contoh: Universitas Andi Djemma">
+
+    <label>Alasan Bergabung</label>
+    <textarea id="reg_alasan" placeholder="Contoh: Ingin berkolaborasi riset dengan OPD..."></textarea>
+
+    <button class="btn-primary full" onclick="submitRegister()">
+      <i class="fas fa-paper-plane"></i> Kirim Pendaftaran
+    </button>
+    <p id="regError" class="error-msg"></p>
+    <p style="font-size:11px;color:#64748B;margin-top:10px;text-align:center;">
+      Dengan mendaftar, Anda menyetujui data digunakan untuk keperluan verifikasi akun.
+    </p>
   </div>
 </div>
 
