@@ -1,10 +1,10 @@
 /* ============================================================
-   TODDOPULI v3.6 - Script Utama
+   TODDOPULI v3.7 - Script Utama
    Bapperida Kota Palopo
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter Jenis & Bentuk Inovasi + ROLE ADMIN OPD
-   + APPROVAL/ACC Admin OPD
+   + APPROVAL/ACC Admin OPD + WIDGET HOMEPAGE
 ============================================================ */
 
 import {
@@ -255,6 +255,14 @@ function formatDateTime(t) {
   } catch { return '-'; }
 }
 
+function formatTanggalSingkat(t) {
+  if (!t) return '';
+  try {
+    const d = new Date(t);
+    return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+  } catch { return t; }
+}
+
 // ============================================================
 // TOAST
 // ============================================================
@@ -300,7 +308,6 @@ function isEditorOrAbove() {
   return ['super_admin', 'admin', 'admin_opd', 'editor'].includes(role());
 }
 
-/** Siapa yang bisa approve/reject? */
 function canApprove() {
   return isSuperAdmin() || isAdmin();
 }
@@ -319,9 +326,7 @@ function filterDataForRole(kategori, list) {
   return [];
 }
 
-/** Filter untuk halaman PUBLIK — hanya data approved */
 function filterForPublic(kategori, list) {
-  // Hanya kategori yang butuh approval
   if (!needsApproval(kategori)) return list;
   return list.filter(d => getApprovalStatus(d) === 'approved');
 }
@@ -419,16 +424,29 @@ function applyRoleToUI() {
       : 'Semua gambar dari Inovasi, Berita, dan Pelatihan';
   }
 
-  // Tampilkan filter status hanya untuk kategori butuh approval & role admin
   updateStatusFilterVisibility();
 }
 
 function updateStatusFilterVisibility() {
   const filterWrap = $('crudStatusFilterWrap');
-  if (!filterWrap) return;
+  const approvalInfo = $('crudApprovalInfo');
+  const approvalLegend = $('crudApprovalLegend');
+
   const k = currentAdminPage;
-  const show = needsApproval(k) && isAnyAdmin();
-  filterWrap.style.display = show ? 'block' : 'none';
+  const butuhApproval = needsApproval(k);
+
+  if (filterWrap) {
+    const show = butuhApproval && isAnyAdmin();
+    filterWrap.style.display = show ? 'block' : 'none';
+  }
+  if (approvalInfo) {
+    const show = butuhApproval && isAdminOpd();
+    approvalInfo.style.display = show ? 'flex' : 'none';
+  }
+  if (approvalLegend) {
+    const show = butuhApproval && canApprove();
+    approvalLegend.style.display = show ? 'flex' : 'none';
+  }
 }
 
 // ============================================================
@@ -491,6 +509,10 @@ function startRealtimeListeners() {
           if (renderFn) renderFn();
           if (['inovasi','berita','pelatihan'].includes(k)) renderPubGaleri();
           updateStats();
+
+          // Refresh widget homepage
+          if (k === 'berita') renderWidgetBerita();
+          if (k === 'pelatihan') renderWidgetPelatihan();
         }
       },
       (err) => console.warn('Realtime err:', k, err)
@@ -519,13 +541,11 @@ function startRealtimeListeners() {
 function updateStats() {
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
 
-  // Publik — hanya approved
   set('statInovasi', filterForPublic('inovasi', cachedData.inovasi).length);
   set('statRiset', filterForPublic('riset', cachedData.riset).length);
   set('statHki', filterForPublic('hki', cachedData.hki).length);
   set('statBerita', cachedData.berita.length);
 
-  // Dashboard — filter role
   let inovasiCount = cachedData.inovasi.length;
   let risetCount = cachedData.riset.length;
   let hkiCount = cachedData.hki.length;
@@ -697,7 +717,103 @@ function renderDatabase() {
 }
 
 // ============================================================
-// GALERI (publik juga filter approved)
+// WIDGET: BERITA TERBARU & PELATIHAN TERBARU (Homepage)
+// ============================================================
+function renderWidgetBerita() {
+  const container = $('widgetBerita');
+  if (!container) return;
+
+  let list = cachedData.berita || [];
+
+  // Sort by tanggal terbaru (descending)
+  list = [...list].sort((a, b) => {
+    const ta = a.tanggal ? new Date(a.tanggal).getTime() : 0;
+    const tb = b.tanggal ? new Date(b.tanggal).getTime() : 0;
+    return tb - ta;
+  });
+
+  const items = list.slice(0, 3);
+
+  if (!items.length) {
+    container.innerHTML = `
+      <div class="widget-empty">
+        <i class="fas fa-newspaper"></i>
+        Belum ada berita terbaru.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = items.map(d => {
+    const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+    const imgHtml = imgSrc
+      ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-newspaper&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
+      : `<div class="widget-item-img placeholder"><i class="fas fa-newspaper"></i></div>`;
+    const date = d.tanggal ? formatTanggalSingkat(d.tanggal) : '';
+    const desc = String(d.deskripsi || '').substring(0, 100);
+
+    return `<div class="widget-item" onclick="showDetail('berita','${d.id}')">
+      ${imgHtml}
+      <div class="widget-item-body">
+        <h4>${esc(d.judul)}</h4>
+        <p>${esc(desc)}</p>
+        ${date ? `<span class="widget-item-date"><i class="fas fa-calendar"></i> ${esc(date)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderWidgetPelatihan() {
+  const container = $('widgetPelatihan');
+  if (!container) return;
+
+  let list = cachedData.pelatihan || [];
+
+  list = [...list].sort((a, b) => {
+    const ta = a.tanggal ? new Date(a.tanggal).getTime() : 0;
+    const tb = b.tanggal ? new Date(b.tanggal).getTime() : 0;
+    return tb - ta;
+  });
+
+  const items = list.slice(0, 3);
+
+  if (!items.length) {
+    container.innerHTML = `
+      <div class="widget-empty">
+        <i class="fas fa-chalkboard-teacher"></i>
+        Belum ada pelatihan terbaru.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = items.map(d => {
+    const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+    const imgHtml = imgSrc
+      ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-chalkboard-teacher&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
+      : `<div class="widget-item-img placeholder"><i class="fas fa-chalkboard-teacher"></i></div>`;
+    const date = d.tanggal ? formatTanggalSingkat(d.tanggal) : '';
+    const desc = String(d.deskripsi || '').substring(0, 100);
+    const kuota = d.kuota ? ` • Kuota: ${esc(d.kuota)}` : '';
+
+    return `<div class="widget-item" onclick="showDetail('pelatihan','${d.id}')">
+      ${imgHtml}
+      <div class="widget-item-body">
+        <h4>${esc(d.judul)}</h4>
+        <p>${esc(desc)}</p>
+        ${date ? `<span class="widget-item-date"><i class="fas fa-calendar"></i> ${esc(date)}${kuota}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderHomeWidgets() {
+  renderWidgetBerita();
+  renderWidgetPelatihan();
+}
+
+// ============================================================
+// GALERI
 // ============================================================
 function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
@@ -707,10 +823,8 @@ function getGaleriItems(filterKategori = '', query = '') {
     if (isAdminOpd()) {
       list = filterDataForRole(k, list);
     } else if (!isAdminPage()) {
-      // Publik — filter approved
       list = filterForPublic(k, list);
     }
-    // Untuk admin/superadmin: lihat semua
     list.forEach(d => {
       if (d.gambar) items.push({ ...d, _kategori: k });
     });
@@ -780,7 +894,10 @@ function showPage(page, e) {
     database: renderDatabase, galeri: renderPubGaleri
   };
   if (map[page]) map[page]();
-  if (page === 'home') updateStats();
+  if (page === 'home') {
+    updateStats();
+    renderHomeWidgets();  // ← refresh widget saat balik ke home
+  }
 }
 
 function toggleMenu() { $('navMenu')?.classList.toggle('show'); }
@@ -799,7 +916,6 @@ function showDetail(k, id) {
     html += `<img class="preview-img" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">`;
   }
 
-  // Badge approval di detail (hanya untuk admin/superadmin, atau admin OPD lihat status mereka)
   if (needsApproval(k) && isAnyAdmin()) {
     html += `<div style="margin-bottom:14px;">${approvalBadge(d)}</div>`;
   }
@@ -821,7 +937,6 @@ function showDetail(k, id) {
     }
   });
 
-  // Info approval
   if (needsApproval(k) && isAnyAdmin()) {
     if (d.approvedBy) {
       html += `<p style="margin-top:12px;padding:10px;background:#DCFCE7;border-radius:8px;font-size:12px;color:#166534;">
@@ -1049,7 +1164,6 @@ function showAdminPage(page, btn) {
     $('crudTitle').innerHTML = `<i class="fas ${KATEGORI[page].icon}"></i> ${t}`;
     $('crudSubtitle').textContent = s;
     $('crudSearch').value = '';
-    // Reset status filter
     const sf = $('crudStatusFilter');
     if (sf) sf.value = '';
     updateStatusFilterVisibility();
@@ -1077,7 +1191,6 @@ function injectStatusFilterToToolbar() {
       <option value="rejected">✗ Ditolak</option>
     </select>
   `;
-  // Insert sebelum toolbar-actions
   toolbarActions.parentNode.insertBefore(wrap, toolbarActions);
 }
 
@@ -1219,14 +1332,12 @@ function renderCrud() {
   let list = cachedData[k] || [];
   list = filterDataForRole(k, list);
 
-  // Filter status (kalau kategori butuh approval)
   if (needsApproval(k) && statusFilter) {
     list = list.filter(d => getApprovalStatus(d) === statusFilter);
   }
 
   if (q) list = list.filter(x => (x.judul||'').toLowerCase().includes(q));
 
-  // Sort: pending dulu untuk admin/superadmin
   if (canApprove() && needsApproval(k)) {
     list.sort((a, b) => {
       const order = { pending: 0, rejected: 1, approved: 2 };
@@ -1352,7 +1463,7 @@ async function rejectItem(id) {
     `Tolak "${item.judul}"?\n\nAlasan penolakan (opsional):`,
     ''
   );
-  if (reason === null) return; // user cancel
+  if (reason === null) return;
 
   try {
     await updateDoc(doc(db, k, id), {
@@ -1402,7 +1513,6 @@ function openForm(id = null) {
   const d = id ? cachedData[k].find(x => x.id === id) : {};
   let html = '';
 
-  // Info approval untuk Admin OPD
   if (isAdminOpd() && needsApproval(k) && !id) {
     html += `<div class="info-box warning" style="margin-bottom:14px;">
       <i class="fas fa-clock"></i>
@@ -1606,15 +1716,12 @@ async function saveForm() {
     if (hidden && hidden.value) data[f.key] = hidden.value;
   }
 
-  // KHUSUS ADMIN OPD: paksa OPD mereka untuk inovasi
   if (isAdminOpd() && k === 'inovasi') {
     data.opd = currentProfile?.opd || data.opd;
   }
 
-  // ================= APPROVAL LOGIC =================
   if (needsApproval(k)) {
     if (isAdminOpd()) {
-      // Admin OPD → reset ke pending (perlu re-approval)
       data.approval_status = 'pending';
       data.approvedBy = null;
       data.approvedAt = null;
@@ -1622,12 +1729,10 @@ async function saveForm() {
       data.rejectedAt = null;
       data.rejectReason = null;
     } else if (canApprove() && !editingId) {
-      // Admin/Super Admin buat baru → auto approved
       data.approval_status = 'approved';
       data.approvedBy = currentUser?.email;
       data.approvedAt = serverTimestamp();
     }
-    // Untuk edit oleh admin/superadmin: status tetap apa adanya
   }
 
   if (isAdminOpd() && !editingId) {
@@ -1670,7 +1775,6 @@ async function saveForm() {
 
     saveActivity(editingId ? 'edit' : 'tambah', k, data.judul);
 
-    // Pesan sukses sesuai role
     let successMsg = 'Data berhasil disimpan.';
     if (isAdminOpd() && needsApproval(k)) {
       successMsg = 'Data berhasil diajukan! Menunggu persetujuan Admin/Super Admin.';
@@ -1831,7 +1935,6 @@ async function handleImport(input) {
         docData.opd = currentProfile?.opd || docData.opd;
       }
 
-      // Approval untuk import
       if (needsApproval(k)) {
         if (isAdminOpd()) {
           docData.approval_status = 'pending';
@@ -2081,7 +2184,6 @@ function globalSearch() {
   const results = [];
   Object.entries(cachedData).forEach(([k, list]) => {
     if (k === 'opd') return;
-    // Untuk publik, hanya approved
     let items = isAdminPage() ? list : filterForPublic(k, list);
     items.forEach(d => {
       if ((d.judul || '').toLowerCase().includes(qLower) ||
@@ -2145,7 +2247,8 @@ Object.assign(window, {
   renderBerita, renderPelatihan, renderDatabase, renderCrud,
   normalizeDriveUrl, normalizeDriveImageUrl,
   toggleUserOpdField,
-  approveItem, rejectItem
+  approveItem, rejectItem,
+  renderWidgetBerita, renderWidgetPelatihan, renderHomeWidgets  // ← tambahan baru
 });
 
 // ============================================================
@@ -2164,6 +2267,7 @@ if (!isAdminPage()) {
       renderPelatihan();
       renderDatabase();
       renderPubGaleri();
+      renderHomeWidgets();  // ← render widget di homepage
       startRealtimeListeners();
     } catch (e) {
       console.error('Init error:', e);
