@@ -37,7 +37,7 @@ const CLOUDINARY_CLOUD = "vsuyvv7v";
 const CLOUDINARY_PRESET = "toddopuli_unsigned";
 
 // ⚠️ GANTI dengan nomor WA admin TODDOPULI Anda
-const ADMIN_WA = "6281234567890";
+const ADMIN_WA = "6285696409288";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
