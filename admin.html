@@ -165,12 +165,38 @@
             </button>
           </div>
 
+          <!-- Info Approval — hanya muncul untuk Admin OPD via CSS class -->
+          <div id="crudApprovalInfo" class="info-box warning" style="display:none;">
+            <i class="fas fa-clock"></i>
+            <div>
+              <p><b>Sistem Persetujuan (ACC)</b> — Data yang Anda input akan berstatus <b>"Menunggu ACC"</b> terlebih dahulu.</p>
+              <p style="margin-top:4px;font-size:12px;">Admin/Super Admin akan menyetujui sebelum tampil di halaman utama. Anda tetap dapat melihat & mengedit data Anda sendiri.</p>
+            </div>
+          </div>
+
+          <!-- Legend Status Approval -->
+          <div id="crudApprovalLegend" class="info-box" style="display:none;">
+            <i class="fas fa-circle-info"></i>
+            <div>
+              <p style="margin-bottom:6px;"><b>Keterangan Status:</b></p>
+              <p style="font-size:12px;line-height:1.8;">
+                <span class="approval-badge approval-pending" style="margin-right:6px;"><i class="fas fa-clock"></i> Menunggu ACC</span>
+                Belum disetujui — belum tampil di halaman utama.<br>
+                <span class="approval-badge approval-approved" style="margin-right:6px;"><i class="fas fa-circle-check"></i> Disetujui</span>
+                Sudah tampil di halaman utama.<br>
+                <span class="approval-badge approval-rejected" style="margin-right:6px;"><i class="fas fa-circle-xmark"></i> Ditolak</span>
+                Tidak disetujui — periksa alasan & revisi.
+              </p>
+            </div>
+          </div>
+
           <!-- Toolbar: Search + Export/Import -->
           <div class="toolbar toolbar-flex">
             <div class="toolbar-search">
               <i class="fas fa-search toolbar-icon"></i>
               <input type="text" id="crudSearch" placeholder="Cari data..." oninput="renderCrud()">
             </div>
+            <!-- Filter status approval akan di-inject oleh JS di sini -->
             <div class="toolbar-actions">
               <button class="btn-tool" onclick="exportExcel()" title="Export ke Excel">
                 <i class="fas fa-file-excel"></i> <span>Excel</span>
@@ -220,15 +246,44 @@
               <i class="fas fa-user-plus"></i> Tambah Admin
             </button>
           </div>
+
           <div class="info-box">
             <i class="fas fa-shield-halved"></i>
             <div>
-              <p style="margin-bottom:6px;"><b>Super Admin:</b> akses penuh + kelola admin lain</p>
-              <p style="margin-bottom:6px;"><b>Admin:</b> CRUD semua data (semua OPD)</p>
-              <p style="margin-bottom:6px;"><b>Admin OPD:</b> hanya kelola data OPD sendiri — menu terbatas (Dashboard, Inovasi, Riset, Pelatihan, Galeri)</p>
-              <p><b>Editor:</b> hanya tambah & edit (tidak bisa hapus)</p>
+              <p style="margin-bottom:8px;font-weight:700;color:var(--primary-dark);">
+                <i class="fas fa-users"></i> Role &amp; Hak Akses
+              </p>
+              <p style="margin-bottom:6px;">
+                <span class="role-badge role-super_admin">Super Admin</span>
+                Akses penuh — kelola semua data &amp; admin lain.
+              </p>
+              <p style="margin-bottom:6px;">
+                <span class="role-badge role-admin">Admin</span>
+                CRUD semua data (semua OPD) + <b>approve/reject</b> data Admin OPD.
+              </p>
+              <p style="margin-bottom:6px;">
+                <span class="role-badge role-admin_opd">Admin OPD</span>
+                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Galeri. Data <b>perlu ACC</b> Admin/Super Admin sebelum tampil di halaman utama.
+              </p>
+              <p>
+                <span class="role-badge role-editor">Editor</span>
+                Hanya tambah &amp; edit (tidak bisa hapus).
+              </p>
             </div>
           </div>
+
+          <div class="info-box warning" style="margin-bottom:20px;">
+            <i class="fas fa-info-circle"></i>
+            <div>
+              <p><b>Alur Persetujuan (Approval):</b></p>
+              <p style="margin-top:4px;font-size:12px;line-height:1.7;">
+                1. <b>Admin OPD</b> submit data Inovasi / Riset / HKI → status <b>Menunggu ACC</b><br>
+                2. <b>Admin/Super Admin</b> cek di menu terkait → klik tombol <b>Setujui</b> atau <b>Tolak</b><br>
+                3. Data yang <b>disetujui</b> baru akan tampil di halaman utama (index.html)
+              </p>
+            </div>
+          </div>
+
           <div id="usersList" class="crud-list"></div>
         </div>
 
@@ -267,7 +322,7 @@
     <label>Role</label>
     <select id="u_role" onchange="toggleUserOpdField()">
       <option value="admin">Admin (CRUD semua data)</option>
-      <option value="admin_opd">Admin OPD (hanya OPD sendiri)</option>
+      <option value="admin_opd">Admin OPD (hanya OPD sendiri + perlu ACC)</option>
       <option value="editor">Editor (tambah & edit saja)</option>
       <option value="super_admin">Super Admin (akses penuh)</option>
     </select>
