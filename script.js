@@ -1,5 +1,5 @@
 /* ============================================================
-   TODDOPULI v4.5 - Script Utama
+   TODDOPULI v4.7 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
@@ -9,6 +9,8 @@
    + FIX EDIT ADMIN BUG
    + REQUEST AKSES DATA (Inovasi, Riset, Publikasi, Database)
    + KALENDER KEGIATAN (Grid, List, Reminder, Export GCal, Filter)
+   + RISET EXTENDED (Kategori, Gambar, Filter kategori & tahun)
+   + SELECT_OR_TEXT + IMAGE UPLOAD/GDRIVE COMBO
 ============================================================ */
 
 import {
@@ -77,11 +79,14 @@ const KATEGORI = {
     fields: [
       { key:'judul', label:'Judul Riset', type:'text', required:true },
       { key:'peneliti', label:'Peneliti', type:'text', required:true },
+      { key:'kategori', label:'Kategori Riset', type:'select_or_text',
+        options:['Penelitian Dasar','Penelitian Terapan','Kajian Strategis','Survei','Studi Kelayakan'] },
       { key:'tahun', label:'Tahun', type:'text', required:true },
       { key:'deskripsi', label:'Deskripsi', type:'textarea', required:true },
       { key:'akses_file', label:'Akses File Dokumen', type:'select',
         options:['Publik','Terbatas'], required:true },
-      { key:'dokumen', label:'Link Dokumen (Google Drive)', type:'text' }
+      { key:'dokumen', label:'Link Dokumen (Google Drive)', type:'text' },
+      { key:'gambar', label:'Gambar Riset (upload atau link Google Drive)', type:'image' }
     ]
   },
   publikasi: {
@@ -445,7 +450,7 @@ function startRealtimeListeners() {
           kalender_kegiatan: () => { renderWidgetKalender(); checkKalenderReminders(); }
         }[k];
         if (fn) fn();
-        if (['inovasi','berita','pelatihan','kalender_kegiatan'].includes(k)) renderPubGaleri();
+        if (['inovasi','riset','berita','pelatihan','kalender_kegiatan'].includes(k)) renderPubGaleri();
         if (k === 'berita') renderWidgetBerita();
         updateStats();
       }
@@ -566,6 +571,22 @@ function buildInovasiCard(d) {
   </div>`;
 }
 
+function buildRisetCard(d) {
+  const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+  const img = imgSrc
+    ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+    : '';
+  const desc = String(d.deskripsi || '');
+  const descCut = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
+  const kategori = d.kategori ? `<span class="badge badge-jenis">${esc(d.kategori)}</span>` : '';
+  const peneliti = d.peneliti ? `<span class="badge">${esc(d.peneliti)}</span>` : '';
+  const tahun = d.tahun ? `<span class="badge">${esc(d.tahun)}</span>` : '';
+  return `<div class="item item-riset" onclick="showDetail('riset','${d.id}')">
+    ${img}<h4>${esc(d.judul)}</h4><p>${esc(descCut)}</p>
+    <div class="badge-row">${kategori}${peneliti}${tahun}</div>
+  </div>`;
+}
+
 function buildPelatihanCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
@@ -658,11 +679,37 @@ function renderInovasi() {
 function renderRiset() {
   if (!$('listRiset')) return;
   const q = ($('searchRiset')?.value || '').toLowerCase();
+  const katFilter = $('filterKategoriRiset')?.value || '';
+  const thFilter  = $('filterTahunRiset')?.value || '';
+
+  // Isi opsi kategori secara otomatis dari data yang ada
+  populateKategoriRisetFilter();
+
   let d = filterForPublic('riset', cachedData.riset);
-  if (q) d = d.filter(x => (x.judul||'').toLowerCase().includes(q));
+  if (q) d = d.filter(x =>
+    (x.judul||'').toLowerCase().includes(q) ||
+    (x.peneliti||'').toLowerCase().includes(q) ||
+    (x.kategori||'').toLowerCase().includes(q) ||
+    (x.deskripsi||'').toLowerCase().includes(q));
+  if (katFilter) d = d.filter(x => x.kategori === katFilter);
+  if (thFilter)  d = d.filter(x => String(x.tahun) === String(thFilter));
+
   $('listRiset').innerHTML = d.length
-    ? d.map(x => buildCard(x, 'riset', `${x.peneliti} • ${x.tahun}`)).join('')
-    : emptyMsg('Belum ada data riset.');
+    ? d.map(buildRisetCard).join('')
+    : emptyMsg('Belum ada data riset yang sesuai filter.');
+}
+
+function populateKategoriRisetFilter() {
+  const sel = $('filterKategoriRiset');
+  if (!sel) return;
+  const cur = sel.value;
+  const list = [...new Set(
+    filterForPublic('riset', cachedData.riset)
+      .map(x => x.kategori)
+      .filter(Boolean)
+  )].sort();
+  sel.innerHTML = '<option value="">Semua Kategori</option>' +
+    list.map(k => `<option value="${esc(k)}"${k===cur?' selected':''}>${esc(k)}</option>`).join('');
 }
 
 function renderPublikasi() {
@@ -843,6 +890,9 @@ function showDetail(k, id) {
     if (d.status) badges += `<span class="badge">${esc(d.status)}</span>`;
     if (badges) html += `<div class="badge-row" style="margin-bottom:14px;">${badges}</div>`;
   }
+  if (k === 'riset' && d.kategori) {
+    html += `<div class="badge-row" style="margin-bottom:14px;"><span class="badge badge-jenis">${esc(d.kategori)}</span></div>`;
+  }
   cfg.fields.forEach(f => {
     if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik','akses_file','link_kegiatan'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
@@ -1017,7 +1067,7 @@ async function submitAccessRequest(kategori, docId, fileKey) {
 // ============================================================
 function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
-  ['inovasi','berita','pelatihan','kalender_kegiatan'].forEach(k => {
+  ['inovasi','riset','berita','pelatihan','kalender_kegiatan'].forEach(k => {
     if (filterKategori && filterKategori !== k) return;
     let list = cachedData[k];
     if (isAdminOpd() || isMasyarakat()) list = filterDataForRole(k, list);
@@ -1222,7 +1272,11 @@ function renderKalenderGrid() {
     const ds = `${kalenderYear}-${String(kalenderMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dayEvents = inMonth.filter(e => isEventOnDate(e, ds));
     const cls = `kal-day${ds===today?' kal-day-today':''}${dayEvents.length?' kal-day-has-event':''}`;
-    html += `<div class="${cls}">`;
+    // Kalau 1 event, klik cell langsung buka detail
+    const clickAttr = dayEvents.length === 1
+      ? `onclick="showKalenderDetail('${dayEvents[0].id}')"`
+      : '';
+    html += `<div class="${cls}" ${clickAttr}>`;
     html += `<div class="kal-day-num">${d}</div>`;
     if (dayEvents.length) {
       html += '<div class="kal-day-events">';
@@ -1581,7 +1635,7 @@ function applyRoleToUI() {
   }
   const galeriSub = $('galeriSubtitle');
   if (galeriSub) galeriSub.textContent = (isAdminOpd() || isMasyarakat())
-    ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Berita, Pelatihan, dan Kalender';
+    ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Riset, Berita, Pelatihan, dan Kalender';
 
   updateStatusFilterVisibility();
   updatePelatihanInfoVisibility();
@@ -1910,6 +1964,17 @@ function openForm(id = null) {
       html += `<select id="f_${f.key}" ${req}>`;
       f.options.forEach(o => { html += `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`; });
       html += `</select>`;
+    } else if (f.type === 'select_or_text') {
+      const listId = `dl_${f.key}`;
+      html += `<input type="text" id="f_${f.key}" list="${listId}" value="${esc(val)}"
+        ${req} placeholder="Pilih dari daftar atau ketik sendiri..." autocomplete="off"
+        style="background:#fff;">`;
+      html += `<datalist id="${listId}">`;
+      f.options.forEach(o => { html += `<option value="${esc(o)}"></option>`; });
+      html += `</datalist>`;
+      html += `<small style="color:#64748B;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
+        <i class="fas fa-info-circle"></i> Klik field untuk pilih dari daftar, atau ketik sendiri jika tidak ada.
+      </small>`;
     } else if (f.type === 'opd_select') {
       if (isAdminOpd()) {
         val = currentProfile?.opd || '';
@@ -1936,13 +2001,21 @@ function openForm(id = null) {
         }
       }
     } else if (f.type === 'image') {
+      // Dukung upload + paste link GDrive
       html += `
+        <input type="url" id="f_${f.key}" value="${esc(val)}"
+          placeholder="https://drive.google.com/file/d/..."
+          style="font-family:monospace;font-size:12px;">
+        <small style="color:#64748B;font-size:11px;display:block;margin-top:-6px;margin-bottom:10px;">
+          <i class="fas fa-info-circle"></i> Tempel link Google Drive, atau upload dari perangkat:
+        </small>
         <div class="upload-box" onclick="document.getElementById('file_${f.key}').click()">
-          <i class="fas fa-cloud-upload-alt"></i><p>Tap untuk pilih gambar</p><small>JPG/PNG • Maks 5MB</small>
+          <i class="fas fa-cloud-upload-alt"></i>
+          <p>Pilih gambar dari perangkat</p>
+          <small>JPG/PNG/JPEG • Maks 5MB</small>
         </div>
         <input type="file" id="file_${f.key}" accept="image/*" style="display:none" onchange="handleFilePick(this,'${f.key}','image')">
-        <div id="prev_${f.key}">${val ? `<img class="preview-img" src="${esc(getImageUrl(val))}" onerror="this.style.display='none'">` : ''}</div>
-        <input type="hidden" id="f_${f.key}" value="${esc(val)}">`;
+        <div id="prev_${f.key}">${val ? `<img class="preview-img" src="${esc(getImageUrl(val))}" onerror="this.style.display='none'">` : ''}</div>`;
     } else if (isUrlField(f.key)) {
       const isImg = f.key === 'gambar';
       const ph = isImg ? 'https://drive.google.com/file/d/... (gambar)' : 'https://drive.google.com/file/d/... (dokumen)';
@@ -1968,8 +2041,13 @@ function handleFilePick(input, key, kind) {
   if (file.size > max*1024*1024) { alert(`Maks ${max}MB`); input.value=''; return; }
   pendingUploadFile = { file, key, kind };
   const prev = $('prev_' + key);
-  if (kind === 'image') prev.innerHTML = `<img class="preview-img" src="${URL.createObjectURL(file)}" alt="">`;
-  else prev.innerHTML = `<div class="preview-file"><i class="fas fa-file"></i><span>${esc(file.name)}</span></div>`;
+  if (kind === 'image') {
+    prev.innerHTML = `<img class="preview-img" src="${URL.createObjectURL(file)}" alt="">`;
+    const urlInput = $('f_' + key);
+    if (urlInput) urlInput.value = '';  // ⬅️ kosongkan URL agar upload yang dipakai
+  } else {
+    prev.innerHTML = `<div class="preview-file"><i class="fas fa-file"></i><span>${esc(file.name)}</span></div>`;
+  }
 }
 
 // ============================================================
@@ -2020,8 +2098,8 @@ async function saveForm() {
   }
   for (const f of cfg.fields) {
     if (f.type !== 'image' && f.type !== 'file') continue;
-    const hidden = $('f_' + f.key);
-    if (hidden && hidden.value) data[f.key] = hidden.value;
+    const el = $('f_' + f.key);
+    if (el && el.value.trim()) data[f.key] = el.value.trim();
   }
 
   if (isAdminOpd() && k === 'inovasi') data.opd = currentProfile?.opd || data.opd;
@@ -2721,7 +2799,9 @@ Object.assign(window, {
   renderKalenderPage, renderKalenderGrid, renderKalenderList,
   showKalenderDetail, exportToGoogleCalendar, renderWidgetKalender,
   kalenderPrevMonth, kalenderNextMonth, kalenderToday, toggleKalenderView,
-  formatEventDate, checkKalenderReminders
+  formatEventDate, checkKalenderReminders,
+  // Riset Extended
+  buildRisetCard, populateKategoriRisetFilter
 });
 
 // ============================================================
