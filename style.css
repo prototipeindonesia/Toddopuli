@@ -1,5 +1,5 @@
 /* ============================================================
-   TODDOPULI - STYLESHEET v4.7
+   TODDOPULI - STYLESHEET v4.8
    Bapperida Kota Palopo
    Tema: Biru Navy Profesional
    + Admin OPD Support
@@ -12,6 +12,7 @@
    + RISET EXTENDED (Kategori, Gambar, Filter)
    + SELECT_OR_TEXT (datalist input)
    + IMAGE UPLOAD + LINK GDRIVE COMBO
+   + KOMPETISI INOVASI & RISET (Card, Widget, Status, Deadline)
 ============================================================ */
 
 /* ==================== RESET & VARIABEL ==================== */
@@ -427,6 +428,60 @@ main { padding: 40px 16px 60px; }
 .item-riset .badge-jenis {
   background: #FEF3C7 !important;
   color: #92400E !important;
+}
+
+
+/* ============================================================
+   KOMPETISI INOVASI & RISET — Card khusus Kompetisi
+============================================================ */
+.item-kompetisi {
+  border-left-color: var(--accent-dark);
+  background: linear-gradient(135deg, #FFFBEB 0%, #FFFFFF 100%);
+}
+.item-kompetisi::before {
+  background: linear-gradient(180deg, var(--accent-dark), var(--accent));
+}
+.item-kompetisi:hover {
+  border-color: var(--accent);
+  box-shadow: 0 12px 30px rgba(245,158,11,0.20);
+}
+.item-kompetisi h4 {
+  color: #78350F;
+}
+.item-kompetisi h4::before {
+  content: '🏆';
+  margin-right: 6px;
+  font-size: 14px;
+}
+.item-kompetisi .badge-jenis {
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+}
+.item-kompetisi .badge-bentuk {
+  background: #DCFCE7 !important;
+  color: #166534 !important;
+}
+
+/* Widget Kompetisi — highlight background */
+#widgetKompetisi .widget-item:hover {
+  background: #FFFBEB;
+  border-radius: 8px;
+}
+
+/* Trophy icon di widget head */
+.widget-head h3 .fa-trophy {
+  color: var(--accent-dark) !important;
+}
+
+/* Admin card kompetisi (border kiri orange) */
+#adm-crud .crud-item.item-kompetisi-admin,
+.crud-item:has(.kompetisi-status) {
+  border-left-color: var(--accent-dark);
+}
+
+/* Kartu admin untuk Kompetisi lebih menonjol */
+#crudList .crud-item .approval-badge + * {
+  margin-top: 6px;
 }
 
 
@@ -937,6 +992,22 @@ main { padding: 40px 16px 60px; }
 
 
 /* ============================================================
+   CRUD ITEM KOMPETISI (Admin) — Highlight oranye
+============================================================ */
+#crudList .crud-item:has(h4:not(:empty)) {
+  /* Default biarkan apa adanya; override di bawah untuk kompetisi via JS badge */
+}
+
+/* Ketika admin pilih page kompetisi, semua crud-item dapat border oranye */
+body:has(#crudTitle i.fa-trophy) #crudList .crud-item {
+  border-left-color: var(--accent-dark);
+}
+body:has(#crudTitle i.fa-trophy) #crudList .crud-item:hover {
+  box-shadow: 0 4px 12px rgba(245,158,11,0.15);
+}
+
+
+/* ============================================================
    APPROVAL BADGE
 ============================================================ */
 .approval-badge {
@@ -967,6 +1038,10 @@ main { padding: 40px 16px 60px; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+/* Status kompetisi badge override */
+.approval-badge.approval-approved i.fa-door-open { color: #166534; }
+.approval-badge.approval-pending i.fa-clock { color: #92400E; }
 
 
 /* ============================================================
@@ -1102,6 +1177,11 @@ main { padding: 40px 16px 60px; }
   background: var(--accent); color: var(--dark);
   padding: 3px 10px; border-radius: 20px;
   font-size: 10px; font-weight: 700;
+}
+
+/* Tag khusus Kompetisi di galeri */
+.galeri-item .galeri-tag:contains("Kompetisi") {
+  background: var(--accent-dark);
 }
 
 
@@ -2138,5 +2218,10 @@ main { padding: 40px 16px 60px; }
     justify-content: center;
     font-size: 12px;
     padding: 10px 14px;
+  }
+
+  /* Kompetisi card di HP */
+  .item-kompetisi h4::before {
+    font-size: 12px;
   }
 }
