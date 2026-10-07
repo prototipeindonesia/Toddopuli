@@ -98,7 +98,11 @@
         <button class="side-btn" onclick="showAdminPage('pelatihan', this)">
           <i class="fas fa-chalkboard-teacher"></i> Pelatihan
         </button>
-        <!-- ⬇️ TAMBAHAN: Menu Kalender Kegiatan -->
+        <!-- ⬇️ TAMBAHAN: Menu Kompetisi Inovasi & Riset -->
+        <button class="side-btn" onclick="showAdminPage('kompetisi', this)">
+          <i class="fas fa-trophy"></i> Kompetisi
+        </button>
+        <!-- ⬇️ Menu Kalender Kegiatan -->
         <button class="side-btn" onclick="showAdminPage('kalender_kegiatan', this)">
           <i class="fas fa-calendar-days"></i> Kalender Kegiatan
         </button>
@@ -401,7 +405,7 @@
         <div id="adm-galeri" class="adm-page">
           <div class="page-head">
             <h2><i class="fas fa-images"></i> Galeri Foto</h2>
-            <p id="galeriSubtitle">Semua gambar dari Inovasi, Riset, Berita, Pelatihan, dan Kalender</p>
+            <p id="galeriSubtitle">Semua gambar dari Inovasi, Riset, Berita, Pelatihan, Kalender, dan Kompetisi</p>
           </div>
           <div class="toolbar toolbar-flex">
             <div class="toolbar-search">
@@ -414,6 +418,7 @@
               <option value="riset">Riset</option>
               <option value="berita">Berita</option>
               <option value="pelatihan">Pelatihan</option>
+              <option value="kompetisi">Kompetisi</option>
               <option value="kalender_kegiatan">Kalender Kegiatan</option>
             </select>
           </div>
@@ -448,11 +453,11 @@
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-admin_opd">Admin OPD</span>
-                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Kalender, Galeri. Data <b>perlu ACC</b> Admin/Super Admin.
+                Hanya kelola data OPD sendiri. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Kompetisi, Kalender, Galeri. Data <b>perlu ACC</b> Admin/Super Admin.
               </p>
               <p style="margin-bottom:6px;">
                 <span class="role-badge role-masyarakat">Masyarakat Umum</span>
-                Dosen, mahasiswa, pelajar, swasta. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Kalender. Data <b>perlu ACC</b> Admin/Super Admin.
+                Dosen, mahasiswa, pelajar, swasta. <b>Menu terbatas:</b> Dashboard, Inovasi, Riset, HKI, Pelatihan, Kompetisi, Kalender. Data <b>perlu ACC</b> Admin/Super Admin.
               </p>
               <p>
                 <span class="role-badge role-editor">Editor</span>
