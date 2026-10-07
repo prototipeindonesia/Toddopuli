@@ -1,5 +1,5 @@
 /* ============================================================
-   TODDOPULI v4.7 - Script Utama
+   TODDOPULI v4.8 - Script Utama
    Firebase + Cloudinary + Chart + Excel + Realtime + Multi-Admin
    + Google Drive Link + OPD Management + Inovasi Extended
    + Filter + ROLE ADMIN OPD + APPROVAL + WIDGET + HKI EXTENDED
@@ -11,6 +11,7 @@
    + KALENDER KEGIATAN (Grid, List, Reminder, Export GCal, Filter)
    + RISET EXTENDED (Kategori, Gambar, Filter kategori & tahun)
    + SELECT_OR_TEXT + IMAGE UPLOAD/GDRIVE COMBO
+   + KOMPETISI INOVASI & RISET (Widget, Status, Deadline, Filter)
 ============================================================ */
 
 import {
@@ -186,6 +187,23 @@ const KATEGORI = {
       { key:'gambar', label:'Gambar Kegiatan (opsional)', type:'image' },
       { key:'link_kegiatan', label:'Link Kegiatan (URL daftar/info, opsional)', type:'text' }
     ]
+  },
+  kompetisi: {
+    nama: 'Kompetisi Inovasi & Riset', icon: 'fa-trophy',
+    fields: [
+      { key:'judul', label:'Nama Kompetisi', type:'text', required:true },
+      { key:'penyelenggara', label:'Penyelenggara', type:'text', required:true },
+      { key:'kategori', label:'Kategori', type:'select_or_text',
+        options:['Inovasi Daerah','Riset & Kajian','Desain Produk','Karya Tulis Ilmiah','Startup Digital','Lainnya'] },
+      { key:'tanggal_mulai', label:'Tanggal Dibuka', type:'date', required:true },
+      { key:'tanggal_selesai', label:'Batas Pendaftaran / Penutupan', type:'date', required:true },
+      { key:'hadiah', label:'Hadiah / Reward (opsional)', type:'text' },
+      { key:'status_kompetisi', label:'Status Kompetisi', type:'select',
+        options:['Akan Datang','Dibuka','Ditutup','Selesai'] },
+      { key:'deskripsi', label:'Deskripsi Kompetisi', type:'textarea', required:true },
+      { key:'link_pendaftaran', label:'Link Pendaftaran / Info', type:'text' },
+      { key:'gambar', label:'Poster Kompetisi (upload atau link GDrive)', type:'image' }
+    ]
   }
 };
 
@@ -193,12 +211,12 @@ const KATEGORI = {
 // KONFIG KHUSUS
 // ============================================================
 const APPROVAL_KATEGORI = ['inovasi', 'riset', 'hki'];
-const CREATOR_ONLY_CREATE = ['pelatihan', 'kalender_kegiatan'];
+const CREATOR_ONLY_CREATE = ['pelatihan', 'kalender_kegiatan', 'kompetisi'];
 
 function needsApproval(k) { return APPROVAL_KATEGORI.includes(k); }
 function creatorOnly(k) { return CREATOR_ONLY_CREATE.includes(k); }
 function getApprovalStatus(d) { return d?.approval_status || 'approved'; }
-function isUrlField(key) { return ['gambar','dokumen','sertifikat','laporan','link_file','link_kegiatan'].includes(key); }
+function isUrlField(key) { return ['gambar','dokumen','sertifikat','laporan','link_file','link_kegiatan','link_pendaftaran'].includes(key); }
 
 // ============================================================
 // STATE GLOBAL
@@ -211,7 +229,8 @@ let cachedData = {
   berita:[], pelatihan:[], database:[], opd:[],
   hki_edukasi:[], hki_requests:[], registrations:[],
   access_requests: [],
-  kalender_kegiatan: []
+  kalender_kegiatan: [],
+  kompetisi: []
 };
 let cachedUsers = [];
 let editingId = null;
@@ -237,8 +256,8 @@ const remindedEventIds = new Set();
 // ============================================================
 // MENU PER ROLE
 // ============================================================
-const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'kalender_kegiatan', 'galeri'];
-const MASYARAKAT_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'kalender_kegiatan'];
+const ADMIN_OPD_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'kompetisi', 'kalender_kegiatan', 'galeri'];
+const MASYARAKAT_MENUS = ['dashboard', 'inovasi', 'riset', 'hki', 'pelatihan', 'kompetisi', 'kalender_kegiatan'];
 const ADMIN_OPD_STAT_CARDS = ['dashInovasi', 'dashRiset', 'dashHki', 'dashPelatihan'];
 
 // ============================================================
@@ -310,7 +329,7 @@ function canApprove() { return isSuperAdmin() || isAdmin(); }
 // FILTER DATA PER ROLE
 // ============================================================
 function filterDataForRole(kategori, list) {
-  if (kategori === 'pelatihan' || kategori === 'kalender_kegiatan') return list;
+  if (kategori === 'pelatihan' || kategori === 'kalender_kegiatan' || kategori === 'kompetisi') return list;
 
   if (isAdminOpd()) {
     if (kategori === 'inovasi') return list.filter(d => d.opd === currentProfile?.opd);
@@ -447,10 +466,11 @@ function startRealtimeListeners() {
           hki: () => { renderHki(); renderHkiWidget(); },
           berita: renderBerita, pelatihan: () => { renderPelatihan(); renderWidgetPelatihan(); },
           database: renderDatabase,
-          kalender_kegiatan: () => { renderWidgetKalender(); checkKalenderReminders(); }
+          kalender_kegiatan: () => { renderWidgetKalender(); checkKalenderReminders(); },
+          kompetisi: () => { renderWidgetKompetisi(); }
         }[k];
         if (fn) fn();
-        if (['inovasi','riset','berita','pelatihan','kalender_kegiatan'].includes(k)) renderPubGaleri();
+        if (['inovasi','riset','berita','pelatihan','kalender_kegiatan','kompetisi'].includes(k)) renderPubGaleri();
         if (k === 'berita') renderWidgetBerita();
         updateStats();
       }
@@ -587,6 +607,26 @@ function buildRisetCard(d) {
   </div>`;
 }
 
+function buildKompetisiCard(d) {
+  const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
+  const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+  const desc = String(d.deskripsi || '');
+  const descCut = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
+  const kategori = d.kategori ? `<span class="badge badge-jenis">${esc(d.kategori)}</span>` : '';
+  const penyelenggara = d.penyelenggara ? `<span class="badge">${esc(d.penyelenggara)}</span>` : '';
+  const deadline = getDeadlineInfo(d);
+  const deadlineBadge = deadline
+    ? `<span class="badge" style="background:${deadline.color}20;color:${deadline.color};font-weight:700;">
+         <i class="fas ${deadline.icon}"></i> ${deadline.label}
+       </span>` : '';
+  const statusBadge = `<div style="margin-top:8px;">${getKompetisiStatusBadge(d)}</div>`;
+  return `<div class="item item-kompetisi" onclick="showDetail('kompetisi','${d.id}')">
+    ${img}<h4>${esc(d.judul)}</h4><p>${esc(descCut)}</p>
+    <div class="badge-row">${kategori}${penyelenggara}${deadlineBadge}</div>
+    ${statusBadge}
+  </div>`;
+}
+
 function buildPelatihanCard(d) {
   const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
   const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
@@ -682,7 +722,6 @@ function renderRiset() {
   const katFilter = $('filterKategoriRiset')?.value || '';
   const thFilter  = $('filterTahunRiset')?.value || '';
 
-  // Isi opsi kategori secara otomatis dari data yang ada
   populateKategoriRisetFilter();
 
   let d = filterForPublic('riset', cachedData.riset);
@@ -893,8 +932,16 @@ function showDetail(k, id) {
   if (k === 'riset' && d.kategori) {
     html += `<div class="badge-row" style="margin-bottom:14px;"><span class="badge badge-jenis">${esc(d.kategori)}</span></div>`;
   }
+  if (k === 'kompetisi') {
+    let badges = '';
+    if (d.kategori) badges += `<span class="badge badge-jenis">${esc(d.kategori)}</span> `;
+    if (d.penyelenggara) badges += `<span class="badge">${esc(d.penyelenggara)}</span> `;
+    if (d.hadiah) badges += `<span class="badge" style="background:#FEF3C7;color:#92400E;"><i class="fas fa-gift"></i> ${esc(d.hadiah)}</span>`;
+    if (badges) html += `<div class="badge-row" style="margin-bottom:14px;">${badges}</div>`;
+    html += `<div style="margin-bottom:14px;">${getKompetisiStatusBadge(d)}</div>`;
+  }
   cfg.fields.forEach(f => {
-    if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik','akses_file','link_kegiatan'].includes(f.key)) return;
+    if (['judul','gambar','dokumen','sertifikat','laporan','link_file','email_pemilik','akses_file','link_kegiatan','link_pendaftaran'].includes(f.key)) return;
     if (d[f.key] != null && d[f.key] !== '') {
       const val = f.type === 'date' ? formatTanggal(d[f.key]) : esc(d[f.key]);
       html += `<p style="margin-bottom:10px;"><b>${f.label}:</b><br>${val}</p>`;
@@ -920,6 +967,10 @@ function showDetail(k, id) {
 
   if (k === 'pelatihan' && d.link_pelatihan) {
     html += `<a href="${esc(d.link_pelatihan)}" target="_blank" rel="noopener" class="btn-ikuti" style="margin-top:12px;display:inline-block;text-decoration:none;"><i class="fas fa-external-link-alt"></i> Ikuti Pelatihan</a>`;
+  }
+
+  if (k === 'kompetisi' && d.link_pendaftaran) {
+    html += `<a href="${esc(d.link_pendaftaran)}" target="_blank" rel="noopener" class="btn-primary" style="margin-top:12px;text-decoration:none;display:inline-block;background:#F59E0B;"><i class="fas fa-external-link-alt"></i> Daftar Sekarang</a>`;
   }
 
   if (k === 'hki' && d.link_file) {
@@ -1067,7 +1118,7 @@ async function submitAccessRequest(kategori, docId, fileKey) {
 // ============================================================
 function getGaleriItems(filterKategori = '', query = '') {
   const items = [];
-  ['inovasi','riset','berita','pelatihan','kalender_kegiatan'].forEach(k => {
+  ['inovasi','riset','berita','pelatihan','kalender_kegiatan','kompetisi'].forEach(k => {
     if (filterKategori && filterKategori !== k) return;
     let list = cachedData[k];
     if (isAdminOpd() || isMasyarakat()) list = filterDataForRole(k, list);
@@ -1082,7 +1133,7 @@ function getGaleriItems(filterKategori = '', query = '') {
 }
 
 function buildGaleriCard(x) {
-  const meta = x.opd || x.peneliti || x.nama_inovator || x.pemilik || formatTanggal(x.tanggal) || '-';
+  const meta = x.opd || x.peneliti || x.nama_inovator || x.pemilik || x.penyelenggara || formatTanggal(x.tanggal) || '-';
   const imgSrc = getImageUrl(x.gambar);
   return `<div class="galeri-item" onclick="showDetail('${x._kategori}','${x.id}')">
     <img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.style.opacity='0.3'">
@@ -1160,7 +1211,11 @@ function renderWidgetPelatihan() {
   }).join('');
 }
 
-function renderHomeWidgets() { renderWidgetBerita(); renderWidgetPelatihan(); }
+function renderHomeWidgets() {
+  renderWidgetBerita();
+  renderWidgetPelatihan();
+  renderWidgetKompetisi();
+}
 
 // ============================================================
 // KALENDER KEGIATAN
@@ -1272,7 +1327,6 @@ function renderKalenderGrid() {
     const ds = `${kalenderYear}-${String(kalenderMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dayEvents = inMonth.filter(e => isEventOnDate(e, ds));
     const cls = `kal-day${ds===today?' kal-day-today':''}${dayEvents.length?' kal-day-has-event':''}`;
-    // Kalau 1 event, klik cell langsung buka detail
     const clickAttr = dayEvents.length === 1
       ? `onclick="showKalenderDetail('${dayEvents[0].id}')"`
       : '';
@@ -1451,6 +1505,100 @@ function checkKalenderReminders() {
       toast('info', '⏰ Reminder Kegiatan', `"${e.judul}" — ${formatEventDate(e)}`, 8000);
     }
   });
+}
+
+// ============================================================
+// KOMPETISI INOVASI & RISET
+// ============================================================
+function getAutoKompetisiStatus(d) {
+  if (!d?.tanggal_mulai) return 'Dibuka';
+  const today = todayStr();
+  if (d.tanggal_selesai && today > d.tanggal_selesai) return 'Selesai';
+  if (today < d.tanggal_mulai) return 'Akan Datang';
+  return 'Dibuka';
+}
+
+function getKompetisiStatusBadge(d) {
+  const s = d?.status_kompetisi || getAutoKompetisiStatus(d);
+  const map = {
+    'Akan Datang': 'approval-pending',
+    'Dibuka': 'approval-approved',
+    'Ditutup': 'approval-rejected',
+    'Selesai': 'approval-rejected'
+  };
+  const icons = {
+    'Akan Datang': 'fa-clock',
+    'Dibuka': 'fa-door-open',
+    'Ditutup': 'fa-door-closed',
+    'Selesai': 'fa-flag-checkered'
+  };
+  return `<span class="approval-badge ${map[s] || 'approval-approved'}">
+    <i class="fas ${icons[s] || 'fa-info-circle'}"></i> ${esc(s)}</span>`;
+}
+
+function getDeadlineInfo(d) {
+  if (!d?.tanggal_selesai) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = new Date(d.tanggal_selesai + 'T00:00:00');
+  const diff = Math.ceil((end - today) / 86400000);
+  if (diff < 0) return { label: 'Sudah ditutup', color: '#64748B', icon: 'fa-lock' };
+  if (diff === 0) return { label: 'Tutup hari ini!', color: '#DC2626', icon: 'fa-fire' };
+  if (diff === 1) return { label: 'Tutup besok!', color: '#DC2626', icon: 'fa-hourglass-end' };
+  if (diff <= 7) return { label: `Sisa ${diff} hari`, color: '#F59E0B', icon: 'fa-hourglass-half' };
+  if (diff <= 30) return { label: `Sisa ${diff} hari`, color: '#2563EB', icon: 'fa-hourglass-start' };
+  return { label: `${diff} hari lagi`, color: '#64748B', icon: 'fa-calendar' };
+}
+
+function renderWidgetKompetisi() {
+  const container = $('widgetKompetisi');
+  if (!container) return;
+
+  const today = todayStr();
+  // Filter: yang belum selesai, sort by tanggal_selesai terdekat
+  const events = (cachedData.kompetisi || [])
+    .filter(e => {
+      const status = e.status_kompetisi || getAutoKompetisiStatus(e);
+      if (status === 'Selesai' || status === 'Ditutup') return false;
+      return (e.tanggal_selesai || e.tanggal_mulai) >= today;
+    })
+    .sort((a,b) => (a.tanggal_selesai||'').localeCompare(b.tanggal_selesai||''))
+    .slice(0, 4);
+
+  if (!events.length) {
+    container.innerHTML = `<div class="widget-empty">
+      <i class="fas fa-trophy"></i>Belum ada kompetisi aktif saat ini.</div>`;
+    return;
+  }
+
+  container.innerHTML = events.map(e => {
+    const imgSrc = e.gambar ? getImageUrl(e.gambar) : '';
+    const imgHtml = imgSrc
+      ? `<div class="widget-item-img"><img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;fas fa-trophy&quot;></i>';this.parentElement.classList.add('placeholder');"></div>`
+      : `<div class="widget-item-img placeholder"><i class="fas fa-trophy"></i></div>`;
+    const deadline = getDeadlineInfo(e);
+    const deadlineBadge = deadline
+      ? `<span class="widget-item-date" style="color:${deadline.color};font-weight:700;">
+           <i class="fas ${deadline.icon}"></i> ${deadline.label}
+         </span>` : '';
+    const kategoriBadge = e.kategori
+      ? `<span class="badge badge-jenis" style="font-size:9px;padding:2px 8px;">${esc(e.kategori)}</span>` : '';
+    const btnDaftar = e.link_pendaftaran
+      ? `<a href="${esc(e.link_pendaftaran)}" target="_blank" rel="noopener" class="widget-item-btn" onclick="event.stopPropagation();" style="background:#F59E0B;">
+           <i class="fas fa-external-link-alt"></i> Daftar
+         </a>` : '';
+    return `<div class="widget-item" onclick="showDetail('kompetisi','${e.id}')">
+      ${imgHtml}
+      <div class="widget-item-body">
+        <h4>${esc(e.judul)}</h4>
+        <p><i class="fas fa-building"></i> ${esc(e.penyelenggara||'-')}</p>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          ${kategoriBadge}
+          ${deadlineBadge}
+          ${btnDaftar}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
@@ -1635,7 +1783,7 @@ function applyRoleToUI() {
   }
   const galeriSub = $('galeriSubtitle');
   if (galeriSub) galeriSub.textContent = (isAdminOpd() || isMasyarakat())
-    ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Riset, Berita, Pelatihan, dan Kalender';
+    ? `Gambar dari data Anda` : 'Semua gambar dari Inovasi, Riset, Berita, Pelatihan, Kalender, dan Kompetisi';
 
   updateStatusFilterVisibility();
   updatePelatihanInfoVisibility();
@@ -1696,6 +1844,7 @@ const PAGE_TITLES = {
   berita: ['Berita', 'Kelola berita & informasi'],
   pelatihan: ['Pelatihan', 'Kelola program pelatihan'],
   kalender_kegiatan: ['Kalender Kegiatan', 'Kelola agenda kegiatan TODDOPULI'],
+  kompetisi: ['Kompetisi Inovasi & Riset', 'Kelola daftar kompetisi & lomba'],
   database: ['Database', 'Kelola dataset & dokumen'],
   opd: ['OPD', 'Kelola daftar OPD'],
   galeri: ['Galeri Foto', 'Semua gambar dari berbagai kategori'],
@@ -1855,7 +2004,7 @@ function renderCrud() {
   container.innerHTML = list.map(d => {
     const imgSrc = d.gambar ? getImageUrl(d.gambar) : '';
     const img = imgSrc ? `<img class="thumb" src="${esc(imgSrc)}" alt="" onerror="this.style.display='none'">` : '';
-    const badge = d.opd || d.jenis || d.kategori || d.peneliti || d.pemilik;
+    const badge = d.opd || d.jenis || d.kategori || d.peneliti || d.pemilik || d.penyelenggara;
     const date = d.tanggal ? formatTanggal(d.tanggal) : d.tahun;
     const desc = String(d.deskripsi || '');
     const descCut = desc.length > 100 ? desc.substring(0,100)+'...' : desc;
@@ -1869,6 +2018,9 @@ function renderCrud() {
     const rejectInfo = (approvalStatus === 'rejected' && d.rejectReason)
       ? `<div class="meta" style="font-size:10px;color:#DC2626;margin-top:4px;"><i class="fas fa-circle-exclamation"></i> ${esc(d.rejectReason)}</div>` : '';
     const approvalRow = showApproval ? `<div style="margin-top:8px;">${approvalBadge(d)}</div>` : '';
+    // Untuk kompetisi, tampilkan status kompetisi juga
+    const kompetisiRow = (k === 'kompetisi')
+      ? `<div style="margin-top:6px;">${getKompetisiStatusBadge(d)}</div>` : '';
     const approvalBtns = showApprovalButtons ? `<div style="display:flex;gap:6px;margin-top:10px;">
       <button onclick="event.stopPropagation();approveItem('${d.id}')" class="btn-approve"><i class="fas fa-check"></i> Setujui</button>
       <button onclick="event.stopPropagation();rejectItem('${d.id}')" class="btn-reject"><i class="fas fa-times"></i> Tolak</button>
@@ -1877,6 +2029,7 @@ function renderCrud() {
       ${img}<h4>${esc(d.judul)}</h4><p>${esc(descCut)}</p>
       ${badge ? `<span class="badge">${esc(badge)}</span>` : ''}
       ${date ? `<div class="meta" style="font-size:11px;color:#94A3B8;margin-top:6px;"><i class="fas fa-calendar"></i> ${esc(date)}</div>` : ''}
+      ${kompetisiRow}
       ${ownerInfo}${rejectInfo}${approvalRow}${approvalBtns}
       <div class="crud-actions">
         <button class="btn-edit" onclick="openForm('${d.id}')" ${editable?'':'disabled'}><i class="fas fa-pen"></i> Edit</button>
@@ -2001,7 +2154,6 @@ function openForm(id = null) {
         }
       }
     } else if (f.type === 'image') {
-      // Dukung upload + paste link GDrive
       html += `
         <input type="url" id="f_${f.key}" value="${esc(val)}"
           placeholder="https://drive.google.com/file/d/..."
@@ -2044,7 +2196,7 @@ function handleFilePick(input, key, kind) {
   if (kind === 'image') {
     prev.innerHTML = `<img class="preview-img" src="${URL.createObjectURL(file)}" alt="">`;
     const urlInput = $('f_' + key);
-    if (urlInput) urlInput.value = '';  // ⬅️ kosongkan URL agar upload yang dipakai
+    if (urlInput) urlInput.value = '';
   } else {
     prev.innerHTML = `<div class="preview-file"><i class="fas fa-file"></i><span>${esc(file.name)}</span></div>`;
   }
@@ -2117,6 +2269,11 @@ async function saveForm() {
   }
 
   if (k === 'hki' && !data.status_proses) data.status_proses = 'Diajukan';
+
+  // Auto-fill status_kompetisi jika kosong
+  if (k === 'kompetisi' && !data.status_kompetisi) {
+    data.status_kompetisi = getAutoKompetisiStatus(data);
+  }
 
   if ((isAdminOpd() || isMasyarakat()) && !editingId) data.createdBy = currentUser?.email;
 
@@ -2722,7 +2879,7 @@ function globalSearch() {
   const q = $('globalSearch')?.value.trim();
   if (!q) return toast('error', 'Kosong', 'Isi kata kunci.');
   const ql = q.toLowerCase(); const results = [];
-  ['inovasi','riset','publikasi','hki','berita','pelatihan','database','kalender_kegiatan'].forEach(k => {
+  ['inovasi','riset','publikasi','hki','berita','pelatihan','database','kalender_kegiatan','kompetisi'].forEach(k => {
     let items = isAdminPage() ? (cachedData[k]||[]) : filterForPublic(k, cachedData[k]||[]);
     items.forEach(d => {
       if ((d.judul||'').toLowerCase().includes(ql) || (d.deskripsi||'').toLowerCase().includes(ql))
@@ -2801,7 +2958,9 @@ Object.assign(window, {
   kalenderPrevMonth, kalenderNextMonth, kalenderToday, toggleKalenderView,
   formatEventDate, checkKalenderReminders,
   // Riset Extended
-  buildRisetCard, populateKategoriRisetFilter
+  buildRisetCard, populateKategoriRisetFilter,
+  // Kompetisi Inovasi & Riset
+  renderWidgetKompetisi, buildKompetisiCard, getKompetisiStatusBadge, getDeadlineInfo, getAutoKompetisiStatus
 });
 
 // ============================================================
@@ -2816,7 +2975,7 @@ if (!isAdminPage()) {
       renderHki(); renderHkiWidget(); renderHkiEdukasi();
       renderBerita(); renderPelatihan(); renderDatabase();
       renderPubGaleri(); renderHomeWidgets();
-      renderWidgetKalender(); checkKalenderReminders();
+      renderWidgetKalender(); renderWidgetKompetisi(); checkKalenderReminders();
       startRealtimeListeners();
     } catch (e) { console.error('Init error:', e); toast('error', 'Gagal Memuat', 'Periksa koneksi.'); }
   })();
